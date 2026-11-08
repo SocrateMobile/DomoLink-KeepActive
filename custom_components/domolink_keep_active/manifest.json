@@ -1,0 +1,16 @@
+{
+  "domain": "domolink_keep_active",
+  "name": "DomoLink KeepActive",
+  "codeowners": [
+    "@SocrateMobile",
+    "@jflavigne"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/SocrateMobile/DomoLink-KeepActive",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/SocrateMobile/DomoLink-KeepActive/issues",
+  "requirements": [],
+  "single_config_entry": false,
+  "version": "1.0.0"
+}

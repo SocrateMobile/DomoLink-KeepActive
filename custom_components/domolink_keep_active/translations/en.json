@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a KeepActive Entity",
+        "description": "Select the source entity (Zigbee or other) to protect and configure hold and grace timeouts.",
+        "data": {
+          "source_entity": "Source Entity",
+          "name": "Custom name (optional)",
+          "hold_duration": "Active hold duration (seconds)",
+          "grace_period": "Unavailable grace period (seconds)",
+          "optimistic": "Optimistic mode (immediate state feedback)"
+        }
+      }
+    },
+    "error": {
+      "unsupported_domain": "The domain of this entity is not supported (choose a binary_sensor, sensor or switch)."
+    },
+    "abort": {
+      "already_configured": "This source entity is already protected by KeepActive."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "KeepActive Options",
+        "description": "Adjust KeepActive timeouts and options.",
+        "data": {
+          "hold_duration": "Active hold duration (seconds)",
+          "grace_period": "Unavailable grace period (seconds)",
+          "optimistic": "Optimistic mode (immediate state feedback)"
+        }
+      }
+    }
+  }
+}

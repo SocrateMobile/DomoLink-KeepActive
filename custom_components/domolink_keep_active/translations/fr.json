@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ajouter une entité KeepActive",
+        "description": "Sélectionnez l'entité source (Zigbee ou autre) à sécuriser et configurez les temporisations de maintien et de grâce.",
+        "data": {
+          "source_entity": "Entité source",
+          "name": "Nom personnalisé (optionnel)",
+          "hold_duration": "Durée de maintien actif (secondes)",
+          "grace_period": "Période de grâce indisponibilité (secondes)",
+          "optimistic": "Mode optimiste (retour d'état immédiat)"
+        }
+      }
+    },
+    "error": {
+      "unsupported_domain": "Le domaine de cette entité n'est pas supporté (choisissez un binary_sensor, sensor ou switch)."
+    },
+    "abort": {
+      "already_configured": "Cette entité source est déjà surveillée par KeepActive."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options KeepActive",
+        "description": "Ajustez les temporisations de l'entité KeepActive.",
+        "data": {
+          "hold_duration": "Durée de maintien actif (secondes)",
+          "grace_period": "Période de grâce indisponibilité (secondes)",
+          "optimistic": "Mode optimiste (retour d'état immédiat)"
+        }
+      }
+    }
+  }
+}
