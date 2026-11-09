@@ -8,6 +8,13 @@ CONF_HOLD_DURATION = "hold_duration"
 CONF_GRACE_PERIOD = "grace_period"
 CONF_OPTIMISTIC = "optimistic"
 CONF_NAME = "name"
+CONF_RULES = "rules"
+CONF_RULE_ID = "rule_id"
+
+ACTION_VIEW = "view"
+ACTION_ADD = "add"
+ACTION_EDIT = "edit"
+ACTION_DELETE = "delete"
 
 DEFAULT_HOLD_DURATION = 30  # seconds
 DEFAULT_GRACE_PERIOD = 60   # seconds

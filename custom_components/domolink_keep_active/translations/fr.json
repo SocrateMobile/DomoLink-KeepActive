@@ -23,14 +23,61 @@
   "options": {
     "step": {
       "init": {
-        "title": "Options KeepActive",
-        "description": "Ajustez les temporisations de l'entité KeepActive.",
+        "title": "DomoLink KeepActive - Configuration",
+        "description": "Que souhaitez-vous faire ? ({count} entité(s) configurée(s))",
         "data": {
+          "choice": "Action à effectuer"
+        }
+      },
+      "view": {
+        "title": "Configuration actuelle ({count} entité(s))",
+        "description": "{summary}",
+        "data": {
+          "view_action": "Action suivante"
+        }
+      },
+      "add": {
+        "title": "Ajouter une entité KeepActive",
+        "description": "Sélectionnez l'entité source (Zigbee ou autre) à sécuriser et configurez les temporisations de maintien et de grâce.",
+        "data": {
+          "source_entity": "Entité source",
+          "name": "Nom personnalisé (optionnel)",
           "hold_duration": "Durée de maintien actif (secondes)",
           "grace_period": "Période de grâce indisponibilité (secondes)",
           "optimistic": "Mode optimiste (retour d'état immédiat)"
         }
+      },
+      "edit_select": {
+        "title": "Modifier une entité KeepActive",
+        "description": "Sélectionnez l'entité que vous souhaitez modifier.",
+        "data": {
+          "rule_to_edit": "Entité à modifier"
+        }
+      },
+      "edit": {
+        "title": "Modifier l'entité : {name}",
+        "description": "Ajustez les paramètres de l'entité source {source}.",
+        "data": {
+          "source_entity": "Entité source",
+          "name": "Nom personnalisé",
+          "hold_duration": "Durée de maintien actif (secondes)",
+          "grace_period": "Période de grâce indisponibilité (secondes)",
+          "optimistic": "Mode optimiste (retour d'état immédiat)"
+        }
+      },
+      "delete": {
+        "title": "Supprimer une entité KeepActive",
+        "description": "Sélectionnez l'entité à supprimer et confirmez votre choix.",
+        "data": {
+          "rule_to_delete": "Entité à supprimer",
+          "confirm_delete": "Je confirme vouloir supprimer cette entité"
+        }
       }
+    },
+    "error": {
+      "unsupported_domain": "Le domaine de cette entité n'est pas supporté (choisissez un binary_sensor, sensor ou switch).",
+      "already_configured": "Cette entité source est déjà configurée dans KeepActive.",
+      "must_confirm_delete": "Veuillez cocher la case de confirmation pour supprimer l'entité."
     }
   }
 }

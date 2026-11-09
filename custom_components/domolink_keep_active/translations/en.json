@@ -3,34 +3,81 @@
     "step": {
       "user": {
         "title": "Add a KeepActive Entity",
-        "description": "Select the source entity (Zigbee or other) to protect and configure hold and grace timeouts.",
+        "description": "Select the source entity (Zigbee or other) to protect and configure hold and grace delays.",
         "data": {
-          "source_entity": "Source Entity",
+          "source_entity": "Source entity",
           "name": "Custom name (optional)",
           "hold_duration": "Active hold duration (seconds)",
-          "grace_period": "Unavailable grace period (seconds)",
+          "grace_period": "Dropout grace period (seconds)",
           "optimistic": "Optimistic mode (immediate state feedback)"
         }
       }
     },
     "error": {
-      "unsupported_domain": "The domain of this entity is not supported (choose a binary_sensor, sensor or switch)."
+      "unsupported_domain": "The domain of this entity is not supported (choose binary_sensor, sensor, or switch)."
     },
     "abort": {
-      "already_configured": "This source entity is already protected by KeepActive."
+      "already_configured": "This source entity is already monitored by KeepActive."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "KeepActive Options",
-        "description": "Adjust KeepActive timeouts and options.",
+        "title": "DomoLink KeepActive - Configuration",
+        "description": "What would you like to do? ({count} configured entity/entities)",
         "data": {
+          "choice": "Action to perform"
+        }
+      },
+      "view": {
+        "title": "Current Configuration ({count} entity/entities)",
+        "description": "{summary}",
+        "data": {
+          "view_action": "Next action"
+        }
+      },
+      "add": {
+        "title": "Add a KeepActive Entity",
+        "description": "Select the source entity to protect and configure hold and grace delays.",
+        "data": {
+          "source_entity": "Source entity",
+          "name": "Custom name (optional)",
           "hold_duration": "Active hold duration (seconds)",
-          "grace_period": "Unavailable grace period (seconds)",
+          "grace_period": "Dropout grace period (seconds)",
           "optimistic": "Optimistic mode (immediate state feedback)"
         }
+      },
+      "edit_select": {
+        "title": "Edit a KeepActive Entity",
+        "description": "Select the entity you want to edit.",
+        "data": {
+          "rule_to_edit": "Entity to edit"
+        }
+      },
+      "edit": {
+        "title": "Edit entity: {name}",
+        "description": "Adjust settings for source entity {source}.",
+        "data": {
+          "source_entity": "Source entity",
+          "name": "Custom name",
+          "hold_duration": "Active hold duration (seconds)",
+          "grace_period": "Dropout grace period (seconds)",
+          "optimistic": "Optimistic mode (immediate state feedback)"
+        }
+      },
+      "delete": {
+        "title": "Delete a KeepActive Entity",
+        "description": "Select the entity to remove and confirm your choice.",
+        "data": {
+          "rule_to_delete": "Entity to delete",
+          "confirm_delete": "I confirm that I want to delete this entity"
+        }
       }
+    },
+    "error": {
+      "unsupported_domain": "The domain of this entity is not supported (choose binary_sensor, sensor, or switch).",
+      "already_configured": "This source entity is already configured in KeepActive.",
+      "must_confirm_delete": "Please check the confirmation box to delete the entity."
     }
   }
 }

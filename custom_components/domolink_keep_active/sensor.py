@@ -6,13 +6,13 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_UNIT_OF_MEASUREMENT,
-)
+from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import CONF_SOURCE_ENTITY
 from .entity import KeepActiveBaseEntity
+from .helpers import get_platform_from_entity, get_rules_from_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,9 +22,15 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the KeepActive sensor entry."""
-    entity = KeepActiveSensor(entry.entry_id, entry.data | entry.options)
-    async_add_entities([entity], True)
+    """Set up the KeepActive sensor entries."""
+    rules = get_rules_from_entry(entry)
+    entities = [
+        KeepActiveSensor(entry.entry_id, rule)
+        for rule in rules
+        if get_platform_from_entity(rule[CONF_SOURCE_ENTITY]) == "sensor"
+    ]
+    if entities:
+        async_add_entities(entities, True)
 
 
 class KeepActiveSensor(KeepActiveBaseEntity, SensorEntity):

@@ -11,7 +11,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 
+from .const import CONF_SOURCE_ENTITY
 from .entity import KeepActiveBaseEntity
+from .helpers import get_platform_from_entity, get_rules_from_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,9 +23,15 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the KeepActive binary sensor entry."""
-    entity = KeepActiveBinarySensor(entry.entry_id, entry.data | entry.options)
-    async_add_entities([entity], True)
+    """Set up the KeepActive binary sensor entries."""
+    rules = get_rules_from_entry(entry)
+    entities = [
+        KeepActiveBinarySensor(entry.entry_id, rule)
+        for rule in rules
+        if get_platform_from_entity(rule[CONF_SOURCE_ENTITY]) == "binary_sensor"
+    ]
+    if entities:
+        async_add_entities(entities, True)
 
 
 class KeepActiveBinarySensor(KeepActiveBaseEntity, BinarySensorEntity):

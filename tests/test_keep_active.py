@@ -74,6 +74,15 @@ if "homeassistant" not in sys.modules:
     ha_ep = make_pkg("homeassistant.helpers.entity_platform")
     ha_ep.AddEntitiesCallback = MagicMock
 
+    ha_dr = make_pkg("homeassistant.helpers.device_registry")
+    class DeviceEntryType:
+        SERVICE = "service"
+    ha_dr.DeviceEntryType = DeviceEntryType
+    ha_dr.DeviceInfo = lambda **kw: kw
+
+    ha_er = make_pkg("homeassistant.helpers.entity_registry")
+    ha_er.async_get = MagicMock()
+
     ha_bs = make_pkg("homeassistant.components.binary_sensor")
     ha_bs.BinarySensorEntity = MockEntity
 
@@ -104,6 +113,13 @@ if "homeassistant" not in sys.modules:
         BOX = "box"
     ha_sel.NumberSelectorMode = NumberSelectorMode
     ha_sel.BooleanSelector = DummySelector
+    ha_sel.SelectSelector = DummySelector
+    ha_sel.SelectSelectorConfig = DummySelector
+    ha_sel.SelectOptionDict = lambda **kw: kw
+    class SelectSelectorMode:
+        LIST = "list"
+        DROPDOWN = "dropdown"
+    ha_sel.SelectSelectorMode = SelectSelectorMode
 
     ha_def = make_pkg("homeassistant.data_entry_flow")
     ha_def.FlowResult = dict
@@ -121,23 +137,47 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, repo_root)
 
 from custom_components.domolink_keep_active.const import (
+    ACTION_ADD,
+    ACTION_DELETE,
+    ACTION_EDIT,
+    ACTION_VIEW,
     CONF_GRACE_PERIOD,
     CONF_HOLD_DURATION,
+    CONF_NAME,
     CONF_OPTIMISTIC,
+    CONF_RULES,
+    CONF_RULE_ID,
     CONF_SOURCE_ENTITY,
     DEFAULT_GRACE_PERIOD,
     DEFAULT_HOLD_DURATION,
+    DEFAULT_OPTIMISTIC,
     DOMAIN,
 )
 from custom_components.domolink_keep_active.entity import KeepActiveBaseEntity
-from custom_components.domolink_keep_active.binary_sensor import KeepActiveBinarySensor
-from custom_components.domolink_keep_active.sensor import KeepActiveSensor
-from custom_components.domolink_keep_active.switch import KeepActiveSwitch
-from custom_components.domolink_keep_active.config_flow import DomoLinkKeepActiveConfigFlow, get_platform_from_entity
+from custom_components.domolink_keep_active.binary_sensor import (
+    KeepActiveBinarySensor,
+    async_setup_entry as bs_async_setup_entry,
+)
+from custom_components.domolink_keep_active.sensor import (
+    KeepActiveSensor,
+    async_setup_entry as s_async_setup_entry,
+)
+from custom_components.domolink_keep_active.switch import (
+    KeepActiveSwitch,
+    async_setup_entry as sw_async_setup_entry,
+)
+from custom_components.domolink_keep_active.helpers import (
+    get_platform_from_entity,
+    get_rules_from_entry,
+)
+from custom_components.domolink_keep_active.config_flow import (
+    DomoLinkKeepActiveConfigFlow,
+    DomoLinkKeepActiveOptionsFlowHandler,
+)
 
 
 class TestDomoLinkKeepActive(unittest.TestCase):
-    """Test suite for KeepActive entity logic and platforms."""
+    """Test suite for KeepActive entity logic, platforms, and CRUD options flow."""
 
     def setUp(self):
         self.hass = MagicMock()
@@ -156,12 +196,84 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertEqual(get_platform_from_entity("switch.plug"), "switch")
         self.assertEqual(get_platform_from_entity("unknown.device"), "binary_sensor")
 
+    def test_device_info_attached(self):
+        """Verify device_info is attached to KeepActiveBaseEntity so entities group under DomoLink."""
+        sensor = KeepActiveBinarySensor(self.entry_id, self.config)
+        self.assertIsNotNone(sensor._attr_device_info)
+        self.assertEqual(sensor._attr_device_info.get("name"), "DomoLink KeepActive")
+        self.assertEqual(sensor._attr_device_info.get("identifiers"), {(DOMAIN, self.entry_id)})
+
+    def test_get_rules_from_entry_v1_compatibility(self):
+        """Verify seamless backward compatibility with v1.0.0 entries having only data[CONF_SOURCE_ENTITY]."""
+        entry = MagicMock()
+        entry.data = {
+            CONF_SOURCE_ENTITY: "binary_sensor.radar_salon",
+            CONF_NAME: "KeepActive Salon",
+            CONF_HOLD_DURATION: 45,
+            CONF_GRACE_PERIOD: 90,
+            CONF_OPTIMISTIC: True,
+        }
+        entry.options = {}
+
+        rules = get_rules_from_entry(entry)
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0][CONF_SOURCE_ENTITY], "binary_sensor.radar_salon")
+        self.assertEqual(rules[0][CONF_NAME], "KeepActive Salon")
+        self.assertEqual(rules[0][CONF_HOLD_DURATION], 45)
+        self.assertEqual(rules[0][CONF_GRACE_PERIOD], 90)
+        self.assertTrue(rules[0][CONF_OPTIMISTIC])
+
+    def test_get_rules_from_entry_multi_rules(self):
+        """Verify get_rules_from_entry returns full list from options."""
+        entry = MagicMock()
+        entry.data = {}
+        entry.options = {
+            CONF_RULES: [
+                {CONF_SOURCE_ENTITY: "binary_sensor.radar_1", CONF_NAME: "Radar 1"},
+                {CONF_SOURCE_ENTITY: "switch.prise_1", CONF_NAME: "Prise 1"},
+            ]
+        }
+        rules = get_rules_from_entry(entry)
+        self.assertEqual(len(rules), 2)
+        self.assertEqual(rules[0][CONF_SOURCE_ENTITY], "binary_sensor.radar_1")
+        self.assertEqual(rules[1][CONF_SOURCE_ENTITY], "switch.prise_1")
+
+    def test_platform_setup_entries(self):
+        """Verify that platform async_setup_entry correctly instantiates only its matching entities."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry_multi"
+        entry.data = {}
+        entry.options = {
+            CONF_RULES: [
+                {CONF_SOURCE_ENTITY: "binary_sensor.motion", CONF_NAME: "Motion"},
+                {CONF_SOURCE_ENTITY: "sensor.temp", CONF_NAME: "Temp"},
+                {CONF_SOURCE_ENTITY: "switch.relay", CONF_NAME: "Relay"},
+            ]
+        }
+
+        # Binary sensor platform
+        bs_added = []
+        asyncio.run(bs_async_setup_entry(self.hass, entry, lambda entities, update: bs_added.extend(entities)))
+        self.assertEqual(len(bs_added), 1)
+        self.assertIsInstance(bs_added[0], KeepActiveBinarySensor)
+
+        # Sensor platform
+        s_added = []
+        asyncio.run(s_async_setup_entry(self.hass, entry, lambda entities, update: s_added.extend(entities)))
+        self.assertEqual(len(s_added), 1)
+        self.assertIsInstance(s_added[0], KeepActiveSensor)
+
+        # Switch platform
+        sw_added = []
+        asyncio.run(sw_async_setup_entry(self.hass, entry, lambda entities, update: sw_added.extend(entities)))
+        self.assertEqual(len(sw_added), 1)
+        self.assertIsInstance(sw_added[0], KeepActiveSwitch)
+
     def test_binary_sensor_turns_on_immediately(self):
         """When source becomes ON, proxy immediately turns ON and cancels any hold."""
         sensor = KeepActiveBinarySensor(self.entry_id, self.config)
         sensor.hass = self.hass
 
-        # Simulate source turning ON
         sensor._handle_new_source_state("on", {})
         self.assertTrue(sensor._attr_is_on)
         self.assertTrue(sensor._attr_available)
@@ -178,20 +290,16 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             sensor = KeepActiveBinarySensor(self.entry_id, self.config)
             sensor.hass = self.hass
 
-            # First turn ON
             sensor._handle_new_source_state("on", {})
             self.assertTrue(sensor._attr_is_on)
 
-            # Then turn OFF
             sensor._handle_new_source_state("off", {})
-            self.assertTrue(sensor._attr_is_on)  # Must still be ON!
+            self.assertTrue(sensor._attr_is_on)
             self.assertEqual(len(timers), 1)
-            self.assertEqual(timers[0][0], 15)  # 15s hold delay
+            self.assertEqual(timers[0][0], 15)
 
-            # Simulate expiration
-            callback = timers[0][1]
             sensor._async_hold_expired(None)
-            self.assertFalse(sensor._attr_is_on)  # Now turned OFF
+            self.assertFalse(sensor._attr_is_on)
 
     def test_unavailable_grace_period(self):
         """When source becomes unavailable, proxy remains available during grace period."""
@@ -205,14 +313,12 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             sensor.hass = self.hass
             sensor._attr_is_on = True
 
-            # Source disconnects during Zigbee update / mesh hop
             sensor._handle_new_source_state("unavailable", {})
-            self.assertTrue(sensor._attr_available)  # Still available due to grace period!
+            self.assertTrue(sensor._attr_available)
             self.assertTrue(sensor._attr_is_on)
             self.assertEqual(len(timers), 1)
-            self.assertEqual(timers[0][0], 30)  # 30s grace delay
+            self.assertEqual(timers[0][0], 30)
 
-            # If device recovers before expiration
             sensor._handle_new_source_state("on", {})
             self.assertTrue(sensor._attr_available)
             self.assertIsNone(sensor._timer_grace)
@@ -252,7 +358,6 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         switch.hass = self.hass
         switch.hass.services.async_call = AsyncMock()
 
-        # Call async_turn_on
         asyncio.run(switch.async_turn_on())
         self.assertTrue(switch._attr_is_on)
         switch.hass.services.async_call.assert_called_with(
@@ -262,7 +367,6 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             blocking=False,
         )
 
-        # Call async_turn_off
         asyncio.run(switch.async_turn_off())
         self.assertFalse(switch._attr_is_on)
         switch.hass.services.async_call.assert_called_with(
@@ -295,7 +399,7 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertFalse(sensor._attr_is_on)
 
     def test_config_flow_validation(self):
-        """Config flow rejects unsupported domain and accepts valid ones."""
+        """Config flow rejects unsupported domain and accepts valid ones with rule persistence."""
         flow = DomoLinkKeepActiveConfigFlow()
         flow.hass = self.hass
         flow.async_set_unique_id = AsyncMock()
@@ -304,19 +408,145 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         flow.async_show_form = MagicMock(return_value={"type": "form"})
 
         # Unsupported domain
-        result_err = asyncio.run(flow.async_step_user({
+        asyncio.run(flow.async_step_user({
             CONF_SOURCE_ENTITY: "camera.salon",
         }))
         flow.async_show_form.assert_called()
         self.assertEqual(flow.async_show_form.call_args[1]["errors"]["base"], "unsupported_domain")
 
         # Valid domain
-        result_ok = asyncio.run(flow.async_step_user({
+        asyncio.run(flow.async_step_user({
             CONF_SOURCE_ENTITY: "binary_sensor.porte",
             CONF_HOLD_DURATION: 20,
             CONF_GRACE_PERIOD: 40,
         }))
         flow.async_create_entry.assert_called_once()
+        created_data = flow.async_create_entry.call_args[1]["data"]
+        self.assertIn(CONF_RULES, created_data)
+        self.assertEqual(created_data[CONF_RULES][0][CONF_SOURCE_ENTITY], "binary_sensor.porte")
+
+    def test_options_flow_init_menu(self):
+        """Test OptionsFlow displays menu choices."""
+        entry = MagicMock()
+        entry.data = {CONF_SOURCE_ENTITY: "binary_sensor.radar"}
+        entry.options = {}
+
+        flow = DomoLinkKeepActiveOptionsFlowHandler(entry)
+        flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+        # Render menu
+        asyncio.run(flow.async_step_init())
+        flow.async_show_form.assert_called_with(
+            step_id="init",
+            data_schema=unittest.mock.ANY,
+            description_placeholders={"count": "1"},
+        )
+
+    def test_options_flow_view_step(self):
+        """Test OptionsFlow view step displays summary."""
+        entry = MagicMock()
+        entry.data = {
+            CONF_SOURCE_ENTITY: "binary_sensor.radar_salon",
+            CONF_NAME: "Radar Salon",
+            CONF_HOLD_DURATION: 30,
+            CONF_GRACE_PERIOD: 60,
+            CONF_OPTIMISTIC: True,
+        }
+        entry.options = {}
+
+        flow = DomoLinkKeepActiveOptionsFlowHandler(entry)
+        flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+        asyncio.run(flow.async_step_view())
+        flow.async_show_form.assert_called_once()
+        summary = flow.async_show_form.call_args[1]["description_placeholders"]["summary"]
+        self.assertIn("Radar Salon", summary)
+        self.assertIn("Hold: 30s", summary)
+
+    def test_options_flow_add_entity(self):
+        """Test adding a new KeepActive entity via OptionsFlow."""
+        entry = MagicMock()
+        entry.data = {CONF_SOURCE_ENTITY: "binary_sensor.radar"}
+        entry.options = {}
+
+        flow = DomoLinkKeepActiveOptionsFlowHandler(entry)
+        flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+        asyncio.run(flow.async_step_add({
+            CONF_SOURCE_ENTITY: "switch.prise_salon",
+            CONF_NAME: "Prise Salon",
+            CONF_HOLD_DURATION: 10,
+            CONF_GRACE_PERIOD: 20,
+            CONF_OPTIMISTIC: True,
+        }))
+
+        flow.async_create_entry.assert_called_once()
+        saved_rules = flow.async_create_entry.call_args[1]["data"][CONF_RULES]
+        self.assertEqual(len(saved_rules), 2)
+        self.assertEqual(saved_rules[1][CONF_SOURCE_ENTITY], "switch.prise_salon")
+
+    def test_options_flow_edit_entity(self):
+        """Test editing an existing KeepActive entity via OptionsFlow."""
+        entry = MagicMock()
+        entry.data = {}
+        entry.options = {
+            CONF_RULES: [
+                {
+                    CONF_RULE_ID: "binary_sensor.motion",
+                    CONF_SOURCE_ENTITY: "binary_sensor.motion",
+                    CONF_NAME: "Ancien Nom",
+                    CONF_HOLD_DURATION: 10,
+                    CONF_GRACE_PERIOD: 10,
+                    CONF_OPTIMISTIC: False,
+                }
+            ]
+        }
+
+        flow = DomoLinkKeepActiveOptionsFlowHandler(entry)
+        flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+        flow._selected_rule_id = "binary_sensor.motion"
+
+        asyncio.run(flow.async_step_edit({
+            CONF_SOURCE_ENTITY: "binary_sensor.motion",
+            CONF_NAME: "Nouveau Nom",
+            CONF_HOLD_DURATION: 60,
+            CONF_GRACE_PERIOD: 120,
+            CONF_OPTIMISTIC: True,
+        }))
+
+        flow.async_create_entry.assert_called_once()
+        saved_rules = flow.async_create_entry.call_args[1]["data"][CONF_RULES]
+        self.assertEqual(saved_rules[0][CONF_NAME], "Nouveau Nom")
+        self.assertEqual(saved_rules[0][CONF_HOLD_DURATION], 60)
+        self.assertEqual(saved_rules[0][CONF_GRACE_PERIOD], 120)
+        self.assertTrue(saved_rules[0][CONF_OPTIMISTIC])
+
+    def test_options_flow_delete_entity(self):
+        """Test deleting a KeepActive entity via OptionsFlow with confirmation."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        entry.data = {}
+        entry.options = {
+            CONF_RULES: [
+                {CONF_RULE_ID: "binary_sensor.motion_1", CONF_SOURCE_ENTITY: "binary_sensor.motion_1"},
+                {CONF_RULE_ID: "binary_sensor.motion_2", CONF_SOURCE_ENTITY: "binary_sensor.motion_2"},
+            ]
+        }
+
+        flow = DomoLinkKeepActiveOptionsFlowHandler(entry)
+        flow.hass = self.hass
+        flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+        # Deleting motion_1
+        asyncio.run(flow.async_step_delete({
+            "rule_to_delete": "binary_sensor.motion_1",
+            "confirm_delete": True,
+        }))
+
+        flow.async_create_entry.assert_called_once()
+        saved_rules = flow.async_create_entry.call_args[1]["data"][CONF_RULES]
+        self.assertEqual(len(saved_rules), 1)
+        self.assertEqual(saved_rules[0][CONF_RULE_ID], "binary_sensor.motion_2")
 
 
 if __name__ == "__main__":

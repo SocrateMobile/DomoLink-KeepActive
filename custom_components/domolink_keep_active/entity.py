@@ -13,6 +13,7 @@ from homeassistant.const import (
     ATTR_ICON,
 )
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -48,10 +49,18 @@ class KeepActiveBaseEntity(RestoreEntity):
         self._hold_duration: int = int(config.get(CONF_HOLD_DURATION, DEFAULT_HOLD_DURATION))
         self._grace_period: int = int(config.get(CONF_GRACE_PERIOD, DEFAULT_GRACE_PERIOD))
         self._optimistic: bool = bool(config.get(CONF_OPTIMISTIC, DEFAULT_OPTIMISTIC))
-        
+
         custom_name = config.get(CONF_NAME)
         self._attr_name = custom_name if custom_name else f"KeepActive {self._source_entity_id}"
         self._attr_unique_id = f"{DOMAIN}_{entry_id}_{self._source_entity_id}"
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry_id)},
+            name="DomoLink KeepActive",
+            manufacturer="DomoLink",
+            model="KeepActive Sentinel",
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
         self._timer_hold: CALLBACK_TYPE | None = None
         self._timer_grace: CALLBACK_TYPE | None = None
@@ -70,6 +79,7 @@ class KeepActiveBaseEntity(RestoreEntity):
             ATTR_GRACE_ACTIVE: self._timer_grace is not None,
             "hold_duration": self._hold_duration,
             "grace_period": self._grace_period,
+            "optimistic": self._optimistic,
         }
 
     async def async_added_to_hass(self) -> None:

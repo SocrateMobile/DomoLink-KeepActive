@@ -45,7 +45,13 @@ Grâce à son architecture opérant directement sur le bus d'états de Home Assi
    * **Durée de maintien actif (s)** : Nombre de secondes pendant lesquelles l'état reste `ON` après détection (ex: 30s ou 60s).
    * **Période de grâce indisponibilité (s)** : Délai d'attente avant d'accepter l'état `unavailable` (ex: 60s).
    * **Mode optimiste** : Activé par défaut pour les switchs.
-4. Une nouvelle entité protégée est créée instantanément. Vous pouvez modifier ces délais à tout moment via le bouton **Configurer** de l'intégration.
+4. Une nouvelle entité protégée est créée instantanément.
+5. Dans **Paramètres** > **Appareils et services** > **DomoLink KeepActive**, cliquez sur **Configurer** pour :
+   * 🔍 **Visualiser la configuration** : voir le récapitulatif complet de toutes vos entités protégées, leurs temporisations et leur type.
+   * ➕ **Ajouter une entité KeepActive** : protéger une nouvelle entité directement depuis le menu.
+   * ✏️ **Modifier une entité existante** : ajuster l'entité source, le nom personnalisé ou les délais de maintien et de grâce.
+   * 🗑️ **Supprimer une entité** : retirer proprement une entité avec nettoyage automatique du registre Home Assistant.
+6. Toutes vos entités KeepActive sont automatiquement regroupées sous l'appareil **DomoLink KeepActive** dans Home Assistant.
 
 ---
 
