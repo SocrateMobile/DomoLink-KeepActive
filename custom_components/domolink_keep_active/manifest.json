@@ -2,8 +2,7 @@
   "domain": "domolink_keep_active",
   "name": "DomoLink KeepActive",
   "codeowners": [
-    "@SocrateMobile",
-    "@jflavigne"
+    "@SocrateMobile"
   ],
   "config_flow": true,
   "documentation": "https://github.com/SocrateMobile/DomoLink-KeepActive",
@@ -12,5 +11,5 @@
   "issue_tracker": "https://github.com/SocrateMobile/DomoLink-KeepActive/issues",
   "requirements": [],
   "single_config_entry": false,
-  "version": "1.2.5"
+  "version": "1.2.6"
 }

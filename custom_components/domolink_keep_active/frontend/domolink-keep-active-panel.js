@@ -703,7 +703,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
             type="text"
             class="search-input"
             placeholder="🔍 Filtrer les appareils..."
-            value="${this._searchQuery}"
+            value="${this._escapeHtml(this._searchQuery)}"
             id="searchInput"
           />
           <button class="btn btn-secondary" id="btnToggleLogs">
@@ -782,8 +782,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
                     .map(
                       (l) => `
                   <div class="log-item">
-                    <span class="log-time">[${l.time_str}]</span>
-                    <span class="log-msg ${l.level}">${l.message}</span>
+                    <span class="log-time">[${this._escapeHtml(l.time_str)}]</span>
+                    <span class="log-msg ${this._escapeHtml(l.level)}">${this._escapeHtml(l.message)}</span>
                   </div>
                 `
                     )
@@ -819,12 +819,12 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div class="card-title-box">
             <h3 class="card-title">
               <span>${rule.platform === "switch" ? "🔌" : rule.platform === "sensor" ? "🌡️" : "📡"}</span>
-              ${rule.name || rule.source_entity}
+              ${this._escapeHtml(rule.name || rule.source_entity)}
             </h3>
-            <span class="card-subtitle">${rule.source_entity}</span>
+            <span class="card-subtitle">${this._escapeHtml(rule.source_entity)}</span>
           </div>
           <div class="badges-row">
-            <span class="badge ${stateClass}">${rule.source_state}</span>
+            <span class="badge ${stateClass}">${this._escapeHtml(rule.source_state)}</span>
             ${enrich.battery_level !== null ? `<span class="badge badge-battery">🔋 ${enrich.battery_level}%</span>` : ""}
             ${enrich.linkquality !== null ? `<span class="badge badge-lqi">📶 ${enrich.linkquality} LQI</span>` : ""}
           </div>
@@ -837,7 +837,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
             <div class="fw-top-row">
               <div class="fw-info">
                 <strong>${enrich.in_progress ? "⏳ Transfert OTA en cours..." : `🚀 Firmware v${enrich.latest_version || "disponible"}`}</strong>
-                <span>Installé : v${enrich.installed_version || "inconnue"}${enrich.latest_version ? ` → v${enrich.latest_version}` : ""}</span>
+                <span>Installé : v${this._escapeHtml(enrich.installed_version || "inconnue")}${enrich.latest_version ? ` → v${this._escapeHtml(enrich.latest_version)}` : ""}</span>
               </div>
               ${
                 enrich.in_progress
@@ -847,7 +847,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
                 </span>
               `
                   : `
-                <button class="fw-btn btn-install-ota" data-rule-id="${rId}" data-update-id="${enrich.update_entity_id}">
+                <button class="fw-btn btn-install-ota" data-rule-id="${this._escapeHtml(rId)}" data-update-id="${this._escapeHtml(enrich.update_entity_id || "")}">
                   Lancer MAJ & Maintien
                 </button>
               `
@@ -1170,8 +1170,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
           .map(
             (l) => `
           <div class="log-item">
-            <span class="log-time">[${l.time_str}]</span>
-            <span class="log-msg ${l.level}">${l.message}</span>
+            <span class="log-time">[${this._escapeHtml(l.time_str)}]</span>
+            <span class="log-msg ${this._escapeHtml(l.level)}">${this._escapeHtml(l.message)}</span>
           </div>
         `
           )

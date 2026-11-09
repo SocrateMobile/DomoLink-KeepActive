@@ -87,13 +87,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _async_register_panel(hass: HomeAssistant) -> None:
-    """Register custom left sidebar panel with cache-busting."""
-    import time
-    panel_url = f"{FRONTEND_URL_PATH}/{FRONTEND_FILE_NAME}?v={VERSION}_{int(time.time())}"
+    """Register custom left sidebar panel."""
+    panel_url = f"{FRONTEND_URL_PATH}/{FRONTEND_FILE_NAME}?v={VERSION}"
     try:
-        if hasattr(frontend, "add_extra_js_url"):
-            frontend.add_extra_js_url(hass, panel_url)
-
         frontend.async_register_built_in_panel(
             hass,
             component_name="custom",
@@ -106,7 +102,7 @@ def _async_register_panel(hass: HomeAssistant) -> None:
                     "module_url": panel_url,
                 }
             },
-            require_admin=False,
+            require_admin=True,
             update=True,
         )
         _LOGGER.debug("DomoLink KeepActive: Panneau latéral enregistré avec succès.")

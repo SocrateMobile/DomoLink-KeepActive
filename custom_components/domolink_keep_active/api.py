@@ -63,7 +63,7 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
     async def get(self, request: web.Request, action: str) -> web.Response:
         """Handle GET requests from the panel."""
         user = request.get("hass_user")
-        if not user:
+        if not user or not user.is_admin:
             raise Unauthorized()
 
         if action in ("data", "state"):
@@ -121,7 +121,7 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
     async def post(self, request: web.Request, action: str) -> web.Response:
         """Handle POST command actions from the panel."""
         user = request.get("hass_user")
-        if not user:
+        if not user or not user.is_admin:
             raise Unauthorized()
 
         try:
