@@ -5,6 +5,10 @@
     "@SocrateMobile"
   ],
   "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
   "documentation": "https://github.com/SocrateMobile/DomoLink-KeepActive",
   "integration_type": "helper",
   "iot_class": "calculated",
