@@ -132,9 +132,9 @@ class OtaKeepAwakeManager:
         self._cancel_session_timer(rule_id)
 
         # Resolve parameters
-        dur = duration_minutes or (rule.get(CONF_OTA_DURATION) if rule else DEFAULT_OTA_DURATION)
-        interval = ping_interval or (rule.get(CONF_PING_INTERVAL) if rule else DEFAULT_PING_INTERVAL)
-        method = ping_method or (rule.get(CONF_PING_METHOD) if rule else DEFAULT_PING_METHOD)
+        dur = duration_minutes or (rule.get(CONF_OTA_DURATION) if rule else None) or DEFAULT_OTA_DURATION
+        interval = ping_interval or (rule.get(CONF_PING_INTERVAL) if rule else None) or DEFAULT_PING_INTERVAL
+        method = ping_method or (rule.get(CONF_PING_METHOD) if rule else None) or DEFAULT_PING_METHOD
 
         now = time.time()
         end_time = now + (dur * 60)
@@ -172,16 +172,21 @@ class OtaKeepAwakeManager:
         return self.get_session_state(rule_id)
 
     def _schedule_next_ping(self, rule_id: str) -> None:
-        """Schedule the next ping callback."""
+        """Schedule the next ping callback safely on the HA event loop."""
         session = self._sessions.get(rule_id)
         if not session or not session.get("active"):
             return
 
         interval = session.get("ping_interval", DEFAULT_PING_INTERVAL)
+
+        @callback
+        def _timer_callback(_now: Any) -> None:
+            self.hass.async_create_task(self._async_timer_step(rule_id))
+
         session["timer_cancel"] = async_call_later(
             self.hass,
             interval,
-            lambda _now: self.hass.async_create_task(self._async_timer_step(rule_id)),
+            _timer_callback,
         )
 
     async def _async_timer_step(self, rule_id: str) -> None:
@@ -251,11 +256,18 @@ class OtaKeepAwakeManager:
                                 "command_type": "server",
                                 "params": {},
                             },
-                            blocking=False,
+                            blocking=True,
                         )
                         success = True
                     except Exception as zha_err:
-                        _LOGGER.debug("ZHA ping fallback: %s", zha_err)
+                        err_str = str(zha_err)
+                        # An UNSUP_CLUSTER_COMMAND or status 129 response proves the device is awake
+                        # and acknowledged the Zigbee radio packet!
+                        if "UNSUP_CLUSTER_COMMAND" in err_str or "129" in err_str:
+                            _LOGGER.debug("ZHA ping acquitté par l'appareil: %s", zha_err)
+                            success = True
+                        else:
+                            _LOGGER.debug("ZHA ping fallback: %s", zha_err)
 
             # 2. Zigbee2MQTT MQTT get ping (if method is z2m_get or auto with MQTT)
             if method in ("z2m_get", "auto") and self.hass.services.has_service("mqtt", "publish"):
@@ -348,6 +360,7 @@ class OtaKeepAwakeManager:
             "installed_version": None,
             "latest_version": None,
             "in_progress": False,
+            "update_percentage": None,
             "is_zha": False,
         }
 
@@ -408,8 +421,23 @@ class OtaKeepAwakeManager:
                     enrichment["update_entity_id"] = e_id
                     enrichment["installed_version"] = state.attributes.get("installed_version")
                     enrichment["latest_version"] = state.attributes.get("latest_version")
-                    enrichment["in_progress"] = bool(state.attributes.get("in_progress", False))
+                    raw_in_progress = state.attributes.get("in_progress", False)
+                    enrichment["in_progress"] = bool(raw_in_progress)
                     enrichment["update_available"] = state.state == "on"
+
+                    raw_pct = state.attributes.get("update_percentage")
+                    if (
+                        raw_pct is None
+                        and isinstance(raw_in_progress, (int, float))
+                        and not isinstance(raw_in_progress, bool)
+                    ):
+                        raw_pct = raw_in_progress
+                    try:
+                        enrichment["update_percentage"] = (
+                            round(float(raw_pct), 1) if raw_pct is not None else None
+                        )
+                    except (ValueError, TypeError):
+                        enrichment["update_percentage"] = None
 
         except Exception as exc:
             _LOGGER.debug("Erreur enrichment pour %s: %s", source_entity_id, exc)
@@ -431,38 +459,64 @@ class OtaKeepAwakeManager:
             if not new_state:
                 return
 
-            in_progress = bool(new_state.attributes.get("in_progress", False))
+            new_in_progress = bool(new_state.attributes.get("in_progress", False))
             old_state = event.data.get("old_state")
             old_in_progress = bool(old_state.attributes.get("in_progress", False)) if old_state else False
 
+            # Check update percentage and versions
+            new_pct = new_state.attributes.get("update_percentage")
+            old_pct = old_state.attributes.get("update_percentage") if old_state else None
+            installed_ver = new_state.attributes.get("installed_version")
+            latest_ver = new_state.attributes.get("latest_version")
+
+            is_completed = (
+                (
+                    not new_in_progress
+                    and old_in_progress
+                    and (
+                        new_state.state == "off"
+                        or (installed_ver and installed_ver == latest_ver)
+                        or (old_pct is not None and float(old_pct) >= 99.0)
+                    )
+                )
+                or (new_pct is not None and float(new_pct) >= 100.0 and not new_in_progress)
+            )
+
             # Check if this update entity belongs to one of our rules
             for rule in self._get_all_rules():
-                if not rule.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER):
-                    continue
-
                 source = rule.get(CONF_SOURCE_ENTITY, "")
                 enrichment = self.get_device_enrichment(source)
                 if enrichment.get("update_entity_id") == entity_id:
                     rule_id = rule.get(CONF_RULE_ID, source)
                     session = self.get_session_state(rule_id)
 
-                    # Start OTA keep-awake on update launch
-                    if in_progress and not old_in_progress:
+                    # 1. Stop unconditionally if update is 100% completed / deployed
+                    if is_completed and session.get("active"):
                         self._add_log(
                             rule_id,
-                            f"🔔 Détection automatique de mise à jour firmware en cours sur {entity_id} !",
-                            "info",
+                            f"🎉 Déploiement firmware terminé avec succès (100%) sur {entity_id} ! Arrêt automatique du défibrillateur.",
+                            "success",
                         )
-                        self.hass.async_create_task(
-                            self.async_start_ota(rule_id, auto_triggered=True)
-                        )
-                    # Stop ONLY if the session was auto-triggered (do NOT cancel user manual session)
-                    elif not in_progress and old_in_progress:
-                        if session.get("auto_triggered"):
+                        self.async_stop_ota(rule_id, reason="mise à jour terminée (100%)")
+                        continue
+
+                    # 2. Auto-start on update launch if enabled in rule
+                    if rule.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER):
+                        if new_in_progress and not old_in_progress:
                             self._add_log(
                                 rule_id,
-                                f"✅ Mise à jour firmware terminée sur {entity_id}.",
-                                "success",
+                                f"🔔 Détection automatique de mise à jour firmware en cours sur {entity_id} !",
+                                "info",
+                            )
+                            self.hass.async_create_task(
+                                self.async_start_ota(rule_id, auto_triggered=True)
+                            )
+                        # Stop if auto-triggered session and update cancelled / ended
+                        elif not new_in_progress and old_in_progress and session.get("auto_triggered"):
+                            self._add_log(
+                                rule_id,
+                                f"ℹ️ Fin de transfert détectée sur {entity_id}.",
+                                "info",
                             )
                             self.async_stop_ota(rule_id, reason="mise à jour terminée")
 

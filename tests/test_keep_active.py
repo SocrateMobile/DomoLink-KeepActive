@@ -493,6 +493,114 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertGreaterEqual(len(logs), 2)
         self.assertIn("Défibrillateur OTA", logs[-1]["message"] if logs else "")
 
+    def test_ota_manager_periodic_timer_step(self):
+        """Test that periodic pings continue and step increments ping_count safely."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        # Start session
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", duration_minutes=30, ping_interval=3))
+        self.assertEqual(ota.get_session_state("binary_sensor.radar")["ping_count"], 1)
+
+        # Trigger timer step
+        asyncio.run(ota._async_timer_step("binary_sensor.radar"))
+        self.assertEqual(ota.get_session_state("binary_sensor.radar")["ping_count"], 2)
+
+        # Trigger second timer step
+        asyncio.run(ota._async_timer_step("binary_sensor.radar"))
+        self.assertEqual(ota.get_session_state("binary_sensor.radar")["ping_count"], 3)
+
+    def test_ota_manager_device_enrichment_percentage(self):
+        """Test extraction of update_percentage in get_device_enrichment."""
+        ota = OtaKeepAwakeManager(self.hass)
+
+        mock_er = MagicMock()
+        mock_dr = MagicMock()
+        mock_entry = MagicMock()
+        mock_entry.device_id = "device_123"
+
+        mock_update_entry = MagicMock()
+        mock_update_entry.device_id = "device_123"
+        mock_update_entry.domain = "update"
+
+        mock_er.async_get.return_value.async_get.return_value = mock_entry
+        mock_er.async_get.return_value.entities = {
+            "update.radar_salon": mock_update_entry,
+        }
+        mock_dr.async_get.return_value.async_get.return_value = MagicMock(identifiers=[("zha", "00:11:22:33:44:55")])
+
+        # State with update in progress at 42.5%
+        update_state = MagicMock()
+        update_state.state = "on"
+        update_state.attributes = {
+            "installed_version": "v1.0",
+            "latest_version": "v2.0",
+            "in_progress": True,
+            "update_percentage": 42.5,
+        }
+        self.hass.states.get.return_value = update_state
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_er.async_get.return_value), \
+             patch("homeassistant.helpers.device_registry.async_get", return_value=mock_dr.async_get.return_value):
+            enrichment = ota.get_device_enrichment("binary_sensor.radar_salon")
+            self.assertEqual(enrichment["update_percentage"], 42.5)
+            self.assertTrue(enrichment["in_progress"])
+            self.assertTrue(enrichment["is_zha"])
+
+    def test_ota_manager_auto_stop_on_100_percent(self):
+        """Test unconditional auto-stop when OTA reaches 100% or finishes deployment."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        # Provide a rule
+        ota.set_rules_provider(lambda: [
+            {
+                CONF_RULE_ID: "binary_sensor.radar",
+                CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                CONF_AUTO_OTA_TRIGGER: True,
+            }
+        ])
+
+        # Mock enrichment returning this update entity
+        ota.get_device_enrichment = MagicMock(return_value={
+            "update_entity_id": "update.radar",
+            "update_available": False,
+            "installed_version": "v2.0",
+            "latest_version": "v2.0",
+            "in_progress": False,
+            "update_percentage": 100.0,
+        })
+
+        # Start manual session
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", auto_triggered=False))
+        self.assertTrue(ota.get_session_state("binary_sensor.radar")["active"])
+
+        captured_handler = None
+        def mock_track(hass, entities, handler):
+            nonlocal captured_handler
+            captured_handler = handler
+            return lambda: None
+
+        with patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track):
+            ota.async_setup_auto_ota_listener()
+
+        self.assertIsNotNone(captured_handler)
+
+        # Trigger event where update completed (old in progress, new not in progress with 100%)
+        event = MagicMock()
+        event.data = {
+            "entity_id": "update.radar",
+            "old_state": MagicMock(attributes={"in_progress": True, "update_percentage": 98.0}),
+            "new_state": MagicMock(state="off", attributes={"in_progress": False, "installed_version": "v2.0", "latest_version": "v2.0", "update_percentage": 100.0}),
+        }
+        captured_handler(event)
+
+        # The session should have stopped unconditionally even though it was manually started
+        self.assertFalse(ota.get_session_state("binary_sensor.radar")["active"])
+        self.assertIn("100%", ota.get_logs()[0]["message"])
+
     def test_api_view_endpoints(self):
         """Test DomolinkKeepActiveApiView GET and POST endpoints."""
         ota = OtaKeepAwakeManager(self.hass)

@@ -349,11 +349,55 @@ class DomolinkKeepActivePanel extends HTMLElement {
           border-radius: 8px;
           padding: 10px 12px;
           display: flex;
-          justify-content: space-between;
-          align-items: center;
+          flex-direction: column;
+          gap: 8px;
           font-size: 12px;
         }
+        .firmware-banner.in-progress {
+          background: rgba(2, 136, 209, 0.12);
+          border-color: rgba(2, 136, 209, 0.35);
+        }
+        .fw-top-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
         .fw-info { display: flex; flex-direction: column; gap: 2px; }
+        .fw-pct-badge {
+          font-family: monospace;
+          font-size: 12px;
+          font-weight: 700;
+          color: #26c6da;
+          background: rgba(38, 198, 218, 0.15);
+          padding: 2px 8px;
+          border-radius: 6px;
+          border: 1px solid rgba(38, 198, 218, 0.3);
+        }
+        .fw-progress-track {
+          width: 100%;
+          height: 8px;
+          background: rgba(255, 255, 255, 0.12);
+          border-radius: 4px;
+          overflow: hidden;
+          position: relative;
+        }
+        .fw-progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #0288d1, #26c6da, #00e676);
+          border-radius: 4px;
+          transition: width 0.4s ease;
+        }
+        .fw-progress-fill.indeterminate {
+          width: 40%;
+          position: absolute;
+          animation: fw-shimmer 1.8s infinite ease-in-out;
+        }
+        @keyframes fw-shimmer {
+          0% { left: -40%; }
+          50% { left: 50%; }
+          100% { left: 100%; }
+        }
         .fw-btn {
           background: #f57c00;
           color: #fff;
@@ -746,16 +790,40 @@ class DomolinkKeepActivePanel extends HTMLElement {
         ${
           enrich.update_available || enrich.in_progress
             ? `
-          <div class="firmware-banner">
-            <div class="fw-info">
-              <strong>${enrich.in_progress ? "⏳ Transfert OTA en cours..." : `🚀 Firmware v${enrich.latest_version || "disponible"}`}</strong>
-              <span>Installé : v${enrich.installed_version || "inconnue"}</span>
+          <div class="firmware-banner ${enrich.in_progress ? "in-progress" : ""}">
+            <div class="fw-top-row">
+              <div class="fw-info">
+                <strong>${enrich.in_progress ? "⏳ Transfert OTA en cours..." : `🚀 Firmware v${enrich.latest_version || "disponible"}`}</strong>
+                <span>Installé : v${enrich.installed_version || "inconnue"}${enrich.latest_version ? ` → v${enrich.latest_version}` : ""}</span>
+              </div>
+              ${
+                enrich.in_progress
+                  ? `
+                <span class="fw-pct-badge" data-rule-id="${rId}">
+                  ${enrich.update_percentage !== null ? `${enrich.update_percentage}%` : "Préparation..."}
+                </span>
+              `
+                  : `
+                <button class="fw-btn btn-install-ota" data-rule-id="${rId}" data-update-id="${enrich.update_entity_id}">
+                  Lancer MAJ & Maintien
+                </button>
+              `
+              }
             </div>
-            ${!enrich.in_progress ? `
-              <button class="fw-btn btn-install-ota" data-rule-id="${rId}" data-update-id="${enrich.update_entity_id}">
-                Lancer MAJ & Maintien
-              </button>
-            ` : ""}
+
+            ${
+              enrich.in_progress
+                ? `
+              <div class="fw-progress-track">
+                <div
+                  class="fw-progress-fill ${enrich.update_percentage === null ? "indeterminate" : ""}"
+                  data-rule-id="${rId}"
+                  style="width: ${enrich.update_percentage !== null ? Math.max(2, enrich.update_percentage) : 40}%;"
+                ></div>
+              </div>
+            `
+                : ""
+            }
           </div>
           <div style="background: rgba(2, 136, 209, 0.12); border: 1px solid rgba(2, 136, 209, 0.35); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #b3e5fc; line-height: 1.4;">
             💡 <strong>Important pour démarrer l'OTA (ZHA)</strong> : Dès que la fenêtre affiche <em>« Preparing »</em>, appuyez <strong>1 fois brièvement sur le bouton du capteur</strong> (ou passez la main devant le radar) pour déclencher son réveil radio initial et engager le transfert du firmware !
@@ -938,13 +1006,53 @@ class DomolinkKeepActivePanel extends HTMLElement {
   }
 
   _updateOtaElements() {
+    let needsFullRender = false;
+
     for (const rule of this._rules) {
       const rId = rule.rule_id || rule.source_entity;
       const remaining = this._localRemaining[rId] || 0;
+      const session = rule.ota_session || {};
+      const enrich = rule.device_enrichment || {};
+
+      const card = this.shadowRoot.querySelector(`.card[data-rule-id="${rId}"]`);
+      if (card) {
+        const currentlyActive = card.classList.contains("ota-active");
+        if (currentlyActive !== !!session.active) {
+          needsFullRender = true;
+          break;
+        }
+      }
+
       const timerEl = this.shadowRoot.querySelector(`.timer-display[data-rule-id="${rId}"]`);
       if (timerEl) {
         timerEl.textContent = this._formatTime(remaining);
       }
+
+      const pingBtn = this.shadowRoot.querySelector(`.btn-ping-now[data-rule-id="${rId}"]`);
+      if (pingBtn) {
+        pingBtn.textContent = `⚡ Ping (${session.ping_count || 0})`;
+      }
+
+      // Update progress bar & percentage badge if in_progress
+      const pctBadge = this.shadowRoot.querySelector(`.fw-pct-badge[data-rule-id="${rId}"]`);
+      if (pctBadge) {
+        pctBadge.textContent = enrich.update_percentage !== null ? `${enrich.update_percentage}%` : "Préparation...";
+      }
+
+      const progressFill = this.shadowRoot.querySelector(`.fw-progress-fill[data-rule-id="${rId}"]`);
+      if (progressFill) {
+        if (enrich.update_percentage !== null) {
+          progressFill.classList.remove("indeterminate");
+          progressFill.style.width = `${Math.max(2, enrich.update_percentage)}%`;
+        } else {
+          progressFill.classList.add("indeterminate");
+          progressFill.style.width = "40%";
+        }
+      }
+    }
+
+    if (needsFullRender && !this._modalOpen) {
+      this.render();
     }
   }
 

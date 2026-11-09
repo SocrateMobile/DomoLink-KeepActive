@@ -3,7 +3,7 @@ from __future__ import annotations
 
 DOMAIN = "domolink_keep_active"
 NAME = "DomoLink KeepActive"
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 
 PANEL_TITLE = "DomoLink KeepActive"
 PANEL_ICON = "mdi:heart-flash"
