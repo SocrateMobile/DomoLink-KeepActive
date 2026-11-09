@@ -109,6 +109,7 @@ class OtaKeepAwakeManager:
             "last_ping_at": session.get("last_ping_at"),
             "last_ping_status": session.get("last_ping_status", "success"),
             "method_used": session.get("method_used", DEFAULT_PING_METHOD),
+            "auto_triggered": session.get("auto_triggered", False),
         }
 
     def get_all_sessions(self) -> dict[str, dict[str, Any]]:
@@ -121,6 +122,7 @@ class OtaKeepAwakeManager:
         duration_minutes: int | None = None,
         ping_interval: int | None = None,
         ping_method: str | None = None,
+        auto_triggered: bool = False,
     ) -> dict[str, Any]:
         """Start an active Keep-Awake session for a device."""
         rule = self._find_rule(rule_id)
@@ -149,13 +151,15 @@ class OtaKeepAwakeManager:
             "last_ping_at": None,
             "last_ping_status": "pending",
             "method_used": method,
+            "auto_triggered": auto_triggered,
             "timer_cancel": None,
         }
         self._sessions[rule_id] = session
 
+        trigger_type = "automatiquement" if auto_triggered else "manuellement"
         self._add_log(
             rule_id,
-            f"🚀 Mode OTA Keep-Awake activé pour {dur} min (Pings toutes les {interval}s via {method})",
+            f"⚡ Défibrillateur OTA activé {trigger_type} pour {dur} min (Pings toutes les {interval}s via {method})",
             "success",
         )
 
@@ -188,7 +192,7 @@ class OtaKeepAwakeManager:
 
         now = time.time()
         if now >= session.get("end_time", now):
-            self.async_stop_ota(rule_id, reason="durée expirée")
+            self.async_stop_ota(rule_id, reason="durée de session écoulée")
             return
 
         await self.async_send_ping(rule_id)
@@ -203,7 +207,7 @@ class OtaKeepAwakeManager:
             count = session.get("ping_count", 0)
             self._add_log(
                 rule_id,
-                f"🛑 Mode OTA Keep-Awake désactivé ({reason}). Total pings envoyés: {count}",
+                f"🛑 Défibrillateur OTA désactivé ({reason}). Total pings envoyés: {count}",
                 "info",
             )
         return self.get_session_state(rule_id)
@@ -230,7 +234,30 @@ class OtaKeepAwakeManager:
 
         success = False
         try:
-            # 1. Zigbee2MQTT MQTT get ping (if method is z2m_get or auto with MQTT)
+            # 1. ZHA Zigbee cluster command / attribute read (for ZHA networks)
+            if method in ("zha_ping", "auto"):
+                zha_ieee = self._resolve_zha_ieee(source_entity)
+                if zha_ieee and self.hass.services.has_service("zha", "issue_zigbee_cluster_command"):
+                    try:
+                        await self.hass.services.async_call(
+                            "zha",
+                            "issue_zigbee_cluster_command",
+                            {
+                                "ieee": zha_ieee,
+                                "endpoint_id": 1,
+                                "cluster_id": 0,
+                                "cluster_type": "in",
+                                "command": 0,
+                                "command_type": "server",
+                                "params": {},
+                            },
+                            blocking=False,
+                        )
+                        success = True
+                    except Exception as zha_err:
+                        _LOGGER.debug("ZHA ping fallback: %s", zha_err)
+
+            # 2. Zigbee2MQTT MQTT get ping (if method is z2m_get or auto with MQTT)
             if method in ("z2m_get", "auto") and self.hass.services.has_service("mqtt", "publish"):
                 z2m_name = self._resolve_z2m_device_name(source_entity)
                 if z2m_name:
@@ -245,7 +272,7 @@ class OtaKeepAwakeManager:
                     )
                     success = True
 
-            # 2. Home Assistant update_entity ping (universal fallback / poll)
+            # 3. Home Assistant update_entity ping (universal fallback / poll)
             if self.hass.services.has_service("homeassistant", "update_entity"):
                 await self.hass.services.async_call(
                     "homeassistant",
@@ -262,7 +289,7 @@ class OtaKeepAwakeManager:
 
             self._add_log(
                 rule_id,
-                f"⚡ Ping #{session.get('ping_count', 1) if session else 1} envoyé à {source_entity} ({method})",
+                f"⚡ Impulsion #{session.get('ping_count', 1) if session else 1} envoyée à {source_entity} ({method})",
                 "debug",
             )
             return success
@@ -274,23 +301,41 @@ class OtaKeepAwakeManager:
             self._add_log(rule_id, f"⚠️ Échec du ping vers {source_entity}: {err}", "warning")
             return False
 
+    def _resolve_zha_ieee(self, entity_id: str) -> str | None:
+        """Resolve ZHA IEEE address from Home Assistant registries."""
+        try:
+            ent_reg = er.async_get(self.hass)
+            dev_reg = dr.async_get(self.hass)
+
+            entry = ent_reg.async_get(entity_id)
+            if entry and entry.device_id:
+                device = dev_reg.async_get(entry.device_id)
+                if device:
+                    for domain, identifier in device.identifiers:
+                        if domain == "zha":
+                            return identifier
+        except Exception:
+            pass
+        return None
+
     def _resolve_z2m_device_name(self, entity_id: str) -> str | None:
         """Resolve Zigbee2MQTT friendly name from Home Assistant registries."""
-        ent_reg = er.async_get(self.hass)
-        dev_reg = dr.async_get(self.hass)
+        try:
+            ent_reg = er.async_get(self.hass)
+            dev_reg = dr.async_get(self.hass)
 
-        entry = ent_reg.async_get(entity_id)
-        if entry and entry.device_id:
-            device = dev_reg.async_get(entry.device_id)
-            if device:
-                # Zigbee2MQTT devices typically have an identifier (DOMAIN, "zigbee2mqtt_xxx")
-                for domain, identifier in device.identifiers:
-                    if domain == "mqtt" or "zigbee2mqtt" in identifier:
-                        return identifier.replace("zigbee2mqtt_", "")
-                if device.name:
-                    return device.name
+            entry = ent_reg.async_get(entity_id)
+            if entry and entry.device_id:
+                device = dev_reg.async_get(entry.device_id)
+                if device:
+                    for domain, identifier in device.identifiers:
+                        if domain == "mqtt" or "zigbee2mqtt" in identifier:
+                            return identifier.replace("zigbee2mqtt_", "")
+                    if device.name:
+                        return device.name
+        except Exception:
+            pass
 
-        # Fallback heuristic: clean object_id
         return entity_id.split(".", 1)[-1]
 
     def get_device_enrichment(self, source_entity_id: str) -> dict[str, Any]:
@@ -303,6 +348,7 @@ class OtaKeepAwakeManager:
             "installed_version": None,
             "latest_version": None,
             "in_progress": False,
+            "is_zha": False,
         }
 
         try:
@@ -314,6 +360,12 @@ class OtaKeepAwakeManager:
                 return enrichment
 
             device_id = entry.device_id
+            device = dev_reg.async_get(device_id)
+            if device:
+                for domain, _ in device.identifiers:
+                    if domain == "zha":
+                        enrichment["is_zha"] = True
+                        break
 
             # Scan entities on the same device
             for e_id, e_entry in ent_reg.entities.items():
@@ -392,6 +444,8 @@ class OtaKeepAwakeManager:
                 enrichment = self.get_device_enrichment(source)
                 if enrichment.get("update_entity_id") == entity_id:
                     rule_id = rule.get(CONF_RULE_ID, source)
+                    session = self.get_session_state(rule_id)
+
                     # Start OTA keep-awake on update launch
                     if in_progress and not old_in_progress:
                         self._add_log(
@@ -399,15 +453,18 @@ class OtaKeepAwakeManager:
                             f"🔔 Détection automatique de mise à jour firmware en cours sur {entity_id} !",
                             "info",
                         )
-                        self.hass.async_create_task(self.async_start_ota(rule_id))
-                    # Stop OTA keep-awake on update finish
-                    elif not in_progress and old_in_progress:
-                        self._add_log(
-                            rule_id,
-                            f"✅ Mise à jour firmware terminée sur {entity_id}.",
-                            "success",
+                        self.hass.async_create_task(
+                            self.async_start_ota(rule_id, auto_triggered=True)
                         )
-                        self.async_stop_ota(rule_id, reason="mise à jour terminée")
+                    # Stop ONLY if the session was auto-triggered (do NOT cancel user manual session)
+                    elif not in_progress and old_in_progress:
+                        if session.get("auto_triggered"):
+                            self._add_log(
+                                rule_id,
+                                f"✅ Mise à jour firmware terminée sur {entity_id}.",
+                                "success",
+                            )
+                            self.async_stop_ota(rule_id, reason="mise à jour terminée")
 
         self._update_listener = async_track_state_change_event(
             self.hass,

@@ -744,16 +744,21 @@ class DomolinkKeepActivePanel extends HTMLElement {
         </div>
 
         ${
-          enrich.update_available
+          enrich.update_available || enrich.in_progress
             ? `
           <div class="firmware-banner">
             <div class="fw-info">
-              <strong>🚀 Firmware v${enrich.latest_version || "disponible"}</strong>
+              <strong>${enrich.in_progress ? "⏳ Transfert OTA en cours..." : `🚀 Firmware v${enrich.latest_version || "disponible"}`}</strong>
               <span>Installé : v${enrich.installed_version || "inconnue"}</span>
             </div>
-            <button class="fw-btn btn-install-ota" data-rule-id="${rId}" data-update-id="${enrich.update_entity_id}">
-              Lancer MAJ & Maintien
-            </button>
+            ${!enrich.in_progress ? `
+              <button class="fw-btn btn-install-ota" data-rule-id="${rId}" data-update-id="${enrich.update_entity_id}">
+                Lancer MAJ & Maintien
+              </button>
+            ` : ""}
+          </div>
+          <div style="background: rgba(2, 136, 209, 0.12); border: 1px solid rgba(2, 136, 209, 0.35); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #b3e5fc; line-height: 1.4;">
+            💡 <strong>Important pour démarrer l'OTA (ZHA)</strong> : Dès que la fenêtre affiche <em>« Preparing »</em>, appuyez <strong>1 fois brièvement sur le bouton du capteur</strong> (ou passez la main devant le radar) pour déclencher son réveil radio initial et engager le transfert du firmware !
           </div>
         `
             : ""

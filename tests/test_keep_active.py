@@ -491,7 +491,7 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         # Check logs
         logs = ota.get_logs()
         self.assertGreaterEqual(len(logs), 2)
-        self.assertIn("Mode OTA Keep-Awake", logs[-1]["message"] if logs else "")
+        self.assertIn("Défibrillateur OTA", logs[-1]["message"] if logs else "")
 
     def test_api_view_endpoints(self):
         """Test DomolinkKeepActiveApiView GET and POST endpoints."""
