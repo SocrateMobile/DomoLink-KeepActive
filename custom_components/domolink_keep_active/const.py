@@ -3,10 +3,10 @@ from __future__ import annotations
 
 DOMAIN = "domolink_keep_active"
 NAME = "DomoLink KeepActive"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 PANEL_TITLE = "DomoLink KeepActive"
-PANEL_ICON = "mdi:radar"
+PANEL_ICON = "mdi:heart-flash"
 PANEL_NAME = "domolink-keep-active-panel"
 PANEL_URL_PATH = "domolink_keep_active"
 FRONTEND_URL_PATH = "/domolink_keep_active_panel"

@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 320" width="1000" height="320">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="logoBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070c18" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#16223f" />
+    </linearGradient>
+
+    <!-- Neon Glow Filter -->
+    <filter id="neonGlowLogo" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="shockGlowLogo" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Defib Bezel Gradient -->
+    <linearGradient id="defibBezelLogo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="45%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#00f5d4" />
+    </linearGradient>
+
+    <!-- Screen Gradient -->
+    <radialGradient id="screenGradLogo" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#062238" />
+      <stop offset="60%" stop-color="#041224" />
+      <stop offset="100%" stop-color="#020612" />
+    </radialGradient>
+
+    <!-- Electric Lightning Gradient -->
+    <linearGradient id="lightningGradLogo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="35%" stop-color="#38bdf8" />
+      <stop offset="85%" stop-color="#00f5d4" />
+      <stop offset="100%" stop-color="#ffe600" />
+    </linearGradient>
+  </defs>
+
+  <!-- Banner Background Container -->
+  <rect width="1000" height="320" rx="28" fill="url(#logoBgGrad)" stroke="rgba(56, 189, 248, 0.35)" stroke-width="3" />
+
+  <!-- Subtle Blueprint & Grid Lines -->
+  <g stroke="rgba(56, 189, 248, 0.05)" stroke-width="1.2">
+    <line x1="0" y1="80" x2="1000" y2="80" />
+    <line x1="0" y1="160" x2="1000" y2="160" />
+    <line x1="0" y1="240" x2="1000" y2="240" />
+    <line x1="160" y1="0" x2="160" y2="320" />
+    <line x1="320" y1="0" x2="320" y2="320" />
+    <line x1="480" y1="0" x2="480" y2="320" />
+    <line x1="640" y1="0" x2="640" y2="320" />
+    <line x1="800" y1="0" x2="800" y2="320" />
+  </g>
+
+  <!-- Left Side: Defibrillator Emblem -->
+  <g transform="translate(40, 30) scale(0.51)">
+    <!-- Main Chassis -->
+    <rect x="96" y="90" width="320" height="330" rx="36" fill="#1e293b" stroke="url(#defibBezelLogo)" stroke-width="6" filter="url(#neonGlowLogo)" />
+    <!-- Screen -->
+    <rect x="114" y="110" width="284" height="250" rx="22" fill="url(#screenGradLogo)" stroke="rgba(56, 189, 248, 0.4)" stroke-width="2" />
+    
+    <!-- Heart outline -->
+    <path d="M 256 270 C 224 234 178 206 178 166 C 178 138 200 124 226 124 C 244 124 254 134 256 138 C 258 134 268 124 286 124 C 312 124 334 138 334 166 C 334 206 288 234 256 270 Z"
+          fill="rgba(56, 189, 248, 0.08)" stroke="rgba(56, 189, 248, 0.4)" stroke-width="2" stroke-dasharray="4,4" />
+
+    <!-- ECG rhythm with shockwave spike -->
+    <path d="M 118 235 L 158 235 L 168 225 L 178 241 L 188 235 L 222 235 L 232 255 L 246 135 L 264 323 L 278 219 L 290 243 L 302 235 L 334 235 L 344 225 L 354 241 L 364 235 L 394 235"
+          fill="none" stroke="#00f5d4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#shockGlowLogo)" />
+    <path d="M 118 235 L 158 235 L 168 225 L 178 241 L 188 235 L 222 235 L 232 255 L 246 135 L 264 323 L 278 219 L 290 243 L 302 235 L 334 235 L 344 225 L 354 241 L 364 235 L 394 235"
+          fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Lightning Shock -->
+    <polygon points="266,120 238,206 262,206 244,292 288,192 264,192"
+             fill="url(#lightningGradLogo)" stroke="#ffffff" stroke-width="2" filter="url(#shockGlowLogo)" />
+
+    <!-- Left Paddle -->
+    <rect x="52" y="220" width="30" height="56" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="3" />
+    <rect x="78" y="224" width="8" height="48" rx="3" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1" />
+    <!-- Right Paddle -->
+    <rect x="430" y="220" width="30" height="56" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="3" />
+    <rect x="426" y="224" width="8" height="48" rx="3" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1" />
+  </g>
+
+  <!-- Right Side: Typography & Brand -->
+  <g transform="translate(320, 105)">
+    <!-- DomoLink Prefix -->
+    <text x="0" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="54" font-weight="800" fill="#ffffff" letter-spacing="0.5">
+      Domo<tspan fill="#38bdf8">Link</tspan>
+    </text>
+
+    <!-- KeepActive Suffix -->
+    <text x="282" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="54" font-weight="800" fill="#00f5d4" letter-spacing="1">
+      KeepActive
+    </text>
+
+    <!-- Subtitle / Tagline -->
+    <text x="2" y="98" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="600" fill="#94a3b8" letter-spacing="2">
+      DEFIBRILLATEUR OTA &amp; PROXY SENTINELLE ZIGBEE
+    </text>
+
+    <!-- Feature Pills -->
+    <g transform="translate(0, 126)">
+      <!-- Pill 1: Maintien Éveillé -->
+      <rect x="0" y="0" width="170" height="32" rx="16" fill="rgba(0, 245, 212, 0.12)" stroke="#00f5d4" stroke-width="1.2" />
+      <text x="14" y="21" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700" fill="#00f5d4">⚡ KEEP-AWAKE OTA</text>
+
+      <!-- Pill 2: Sliders 10-90 min -->
+      <rect x="184" y="0" width="168" height="32" rx="16" fill="rgba(56, 189, 248, 0.12)" stroke="#38bdf8" stroke-width="1.2" />
+      <text x="200" y="21" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700" fill="#38bdf8">🎚️ DUREE 10-90 MIN</text>
+
+      <!-- Pill 3: Zéro Veille Profonde -->
+      <rect x="366" y="0" width="186" height="32" rx="16" fill="rgba(255, 230, 0, 0.12)" stroke="#ffe600" stroke-width="1.2" />
+      <text x="382" y="21" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700" fill="#ffe600">🛡️ ZERO DEEP-SLEEP</text>
+    </g>
+  </g>
+</svg>

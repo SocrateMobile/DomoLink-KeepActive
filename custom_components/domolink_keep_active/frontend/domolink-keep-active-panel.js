@@ -608,8 +608,14 @@ class DomolinkKeepActivePanel extends HTMLElement {
 
       <div class="header">
         <div class="header-title-box">
-          <h1>DomoLink KeepActive</h1>
-          <span class="badge-version">v1.2.0 OTA</span>
+          <img src="/domolink_keep_active_panel/icon.png" width="42" height="42" alt="DomoLink Defibrillator Icon" style="border-radius:10px; box-shadow:0 0 16px rgba(56, 189, 248, 0.45); border: 1px solid rgba(56, 189, 248, 0.4);" />
+          <div>
+            <h1 style="display:flex; align-items:center; gap:8px;">
+              DomoLink KeepActive
+              <span class="badge-version">⚡ DÉFIBRILLATEUR OTA</span>
+            </h1>
+            <div style="font-size:11px; color:#80deea; letter-spacing:0.8px; font-weight:600;">ANTI DEEP-SLEEP • SENTINELLE ZIGBEE</div>
+          </div>
         </div>
         <div class="header-actions">
           <input
@@ -756,8 +762,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
         <!-- BLOC OTA KEEP-AWAKE -->
         <div class="ota-box">
           <div class="ota-header-row">
-            <span class="ota-title">⚡ Maintien Éveillé OTA</span>
-            ${isActive ? `<span style="font-size:11px; color:#4fc3f7; font-weight:700;">EN COURS</span>` : ""}
+            <span class="ota-title">⚡ DÉFIBRILLATEUR OTA (KEEP-AWAKE)</span>
+            ${isActive ? `<span style="font-size:11px; color:#4fc3f7; font-weight:700;">DÉFIBRILLATION ACTIVE</span>` : ""}
           </div>
 
           <!-- Bouton Toggle Principal -->
@@ -765,7 +771,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
             class="ota-toggle-btn ${isActive ? "btn-stop" : "btn-start"} toggle-ota-btn"
             data-rule-id="${rId}"
           >
-            ${isActive ? "🛑 Arrêter le maintien éveillé" : "▶️ Activer le maintien éveillé (OTA)"}
+            ${isActive ? "🛑 Arrêter la défibrillation" : "⚡ Activer le défibrillateur OTA"}
           </button>
 
           ${
