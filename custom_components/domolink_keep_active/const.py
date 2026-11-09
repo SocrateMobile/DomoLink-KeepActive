@@ -3,7 +3,7 @@ from __future__ import annotations
 
 DOMAIN = "domolink_keep_active"
 NAME = "DomoLink KeepActive"
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 
 PANEL_TITLE = "DomoLink KeepActive"
 PANEL_ICON = "mdi:heart-flash"
@@ -25,6 +25,8 @@ CONF_OTA_DURATION = "ota_duration"
 CONF_PING_INTERVAL = "ping_interval"
 CONF_PING_METHOD = "ping_method"
 CONF_AUTO_OTA_TRIGGER = "auto_ota_trigger"
+CONF_ON_OTA_FAILURE = "on_ota_failure"
+CONF_ON_OTA_TIMEOUT = "on_ota_timeout"
 
 DEFAULT_HOLD_DURATION = 30  # seconds
 DEFAULT_GRACE_PERIOD = 60   # seconds
@@ -34,6 +36,22 @@ DEFAULT_OTA_DURATION = 30   # minutes (range 10 - 90)
 DEFAULT_PING_INTERVAL = 5   # seconds (range 1 - 60)
 DEFAULT_PING_METHOD = "auto"
 DEFAULT_AUTO_OTA_TRIGGER = True
+
+# OTA Failure & Timeout Behaviors
+OTA_FAILURE_KEEP_ALIVE = "keep_alive"
+OTA_FAILURE_STOP = "stop"
+OTA_FAILURE_RETRY = "retry"
+DEFAULT_ON_OTA_FAILURE = OTA_FAILURE_KEEP_ALIVE
+
+OTA_TIMEOUT_EXTEND = "auto_extend"
+OTA_TIMEOUT_STOP = "stop"
+DEFAULT_ON_OTA_TIMEOUT = OTA_TIMEOUT_EXTEND
+
+AUTO_EXTEND_MINUTES = 15
+MAX_OTA_RETRIES = 2
+
+OTA_FAILURE_MODES = [OTA_FAILURE_KEEP_ALIVE, OTA_FAILURE_STOP, OTA_FAILURE_RETRY]
+OTA_TIMEOUT_MODES = [OTA_TIMEOUT_EXTEND, OTA_TIMEOUT_STOP]
 
 MIN_OTA_DURATION = 10       # minutes
 MAX_OTA_DURATION = 90       # minutes

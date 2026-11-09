@@ -11,10 +11,13 @@ from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
+    AUTO_EXTEND_MINUTES,
     CONF_AUTO_OTA_TRIGGER,
     CONF_GRACE_PERIOD,
     CONF_HOLD_DURATION,
     CONF_NAME,
+    CONF_ON_OTA_FAILURE,
+    CONF_ON_OTA_TIMEOUT,
     CONF_OPTIMISTIC,
     CONF_OTA_DURATION,
     CONF_PING_INTERVAL,
@@ -25,6 +28,8 @@ from .const import (
     DEFAULT_AUTO_OTA_TRIGGER,
     DEFAULT_GRACE_PERIOD,
     DEFAULT_HOLD_DURATION,
+    DEFAULT_ON_OTA_FAILURE,
+    DEFAULT_ON_OTA_TIMEOUT,
     DEFAULT_OPTIMISTIC,
     DEFAULT_OTA_DURATION,
     DEFAULT_PING_INTERVAL,
@@ -198,6 +203,15 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
                 }
             )
 
+        # 3b. EXTEND OTA SESSION
+        if action == "extend_ota":
+            rule_id = body.get("rule_id")
+            if not rule_id:
+                return self.json({"error": "rule_id manquant"}, status=400)
+            minutes = int(body.get("minutes", AUTO_EXTEND_MINUTES))
+            session = self.ota_manager.async_extend_session(rule_id, minutes)
+            return self.json({"status": "ok", "session": session})
+
         # 4. SAVE RULE (ADD OR MODIFY)
         if action == "save_rule":
             source_entity = body.get("source_entity")
@@ -213,6 +227,8 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
             ping_int = normalize_ping_interval(body.get("ping_interval", DEFAULT_PING_INTERVAL))
             ping_meth = body.get("ping_method", DEFAULT_PING_METHOD)
             auto_ota = bool(body.get("auto_ota_trigger", DEFAULT_AUTO_OTA_TRIGGER))
+            on_failure = body.get("on_ota_failure", DEFAULT_ON_OTA_FAILURE)
+            on_timeout = body.get("on_ota_timeout", DEFAULT_ON_OTA_TIMEOUT)
 
             updated = False
             for i, r in enumerate(rules):
@@ -228,6 +244,8 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
                         CONF_PING_INTERVAL: ping_int,
                         CONF_PING_METHOD: ping_meth,
                         CONF_AUTO_OTA_TRIGGER: auto_ota,
+                        CONF_ON_OTA_FAILURE: on_failure,
+                        CONF_ON_OTA_TIMEOUT: on_timeout,
                     }
                     updated = True
                     break
@@ -245,6 +263,8 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
                         CONF_PING_INTERVAL: ping_int,
                         CONF_PING_METHOD: ping_meth,
                         CONF_AUTO_OTA_TRIGGER: auto_ota,
+                        CONF_ON_OTA_FAILURE: on_failure,
+                        CONF_ON_OTA_TIMEOUT: on_timeout,
                     }
                 )
 

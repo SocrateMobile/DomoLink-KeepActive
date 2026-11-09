@@ -12,7 +12,9 @@
           "optimistic": "Optimistic mode (immediate state feedback)",
           "ota_duration": "Total OTA keep-awake duration (minutes)",
           "ping_interval": "Ping interval (seconds)",
-          "auto_ota_trigger": "Auto-activate on firmware update"
+          "auto_ota_trigger": "Auto-activate on firmware update",
+          "on_ota_failure": "Action on OTA failure",
+          "on_ota_timeout": "Action if timer expires during OTA"
         }
       }
     },
@@ -51,7 +53,9 @@
           "ota_duration": "Total OTA keep-awake duration (minutes)",
           "ping_interval": "Ping interval (seconds)",
           "ping_method": "Wakeup ping transmission method",
-          "auto_ota_trigger": "Auto-activate on firmware update"
+          "auto_ota_trigger": "Auto-activate on firmware update",
+          "on_ota_failure": "Action on OTA failure",
+          "on_ota_timeout": "Action if timer expires during OTA"
         }
       },
       "edit_select": {
@@ -73,7 +77,9 @@
           "ota_duration": "Total OTA keep-awake duration (minutes)",
           "ping_interval": "Ping interval (seconds)",
           "ping_method": "Wakeup ping transmission method",
-          "auto_ota_trigger": "Auto-activate on firmware update"
+          "auto_ota_trigger": "Auto-activate on firmware update",
+          "on_ota_failure": "Action on OTA failure",
+          "on_ota_timeout": "Action if timer expires during OTA"
         }
       },
       "delete": {

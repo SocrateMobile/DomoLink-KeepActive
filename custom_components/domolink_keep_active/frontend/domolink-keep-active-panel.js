@@ -150,8 +150,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
       <style>
         :host {
           display: block;
-          color: var(--primary-text-color, #e1e7ec);
-          background-color: var(--primary-background-color, #101418);
+          color: var(--primary-text-color, #212121);
+          background-color: var(--primary-background-color, #fafafa);
           font-family: var(--paper-font-body1_-_font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
           min-height: 100vh;
           box-sizing: border-box;
@@ -176,18 +176,18 @@ class DomolinkKeepActivePanel extends HTMLElement {
           margin: 0;
           font-size: 26px;
           font-weight: 700;
-          background: linear-gradient(135deg, #0288d1, #26c6da);
+          background: linear-gradient(135deg, #0288d1, #00acc1);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
         }
         .badge-version {
-          background: rgba(38, 198, 218, 0.15);
-          color: #26c6da;
+          background: rgba(2, 136, 209, 0.12);
+          color: #0288d1;
           font-size: 11px;
           padding: 2px 8px;
           border-radius: 12px;
-          border: 1px solid rgba(38, 198, 218, 0.3);
-          font-weight: 600;
+          border: 1px solid rgba(2, 136, 209, 0.3);
+          font-weight: 700;
         }
 
         /* Boutons header */
@@ -198,9 +198,9 @@ class DomolinkKeepActivePanel extends HTMLElement {
           flex-wrap: wrap;
         }
         .search-input {
-          background: var(--card-background-color, #1a2026);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: var(--primary-text-color, #fff);
+          background: var(--card-background-color, #ffffff);
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
+          color: var(--primary-text-color, #212121);
           padding: 8px 16px;
           border-radius: 8px;
           outline: none;
@@ -209,7 +209,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
         }
         .btn {
           background: linear-gradient(135deg, #0288d1, #00acc1);
-          color: #fff;
+          color: #ffffff;
           border: none;
           padding: 9px 18px;
           border-radius: 8px;
@@ -226,12 +226,12 @@ class DomolinkKeepActivePanel extends HTMLElement {
           box-shadow: 0 4px 12px rgba(2, 136, 209, 0.35);
         }
         .btn-secondary {
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          color: var(--primary-text-color, #fff);
+          background: var(--secondary-background-color, rgba(125, 125, 125, 0.1));
+          border: 1px solid var(--divider-color, rgba(125, 125, 125, 0.2));
+          color: var(--primary-text-color, #212121);
         }
         .btn-secondary:hover {
-          background: rgba(255, 255, 255, 0.15);
+          background: var(--divider-color, rgba(125, 125, 125, 0.2));
           box-shadow: none;
         }
 
@@ -243,14 +243,14 @@ class DomolinkKeepActivePanel extends HTMLElement {
           margin-bottom: 28px;
         }
         .stat-card {
-          background: var(--card-background-color, #191f26);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--card-background-color, #ffffff);
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
           border-radius: 12px;
           padding: 16px 20px;
           display: flex;
           align-items: center;
           gap: 16px;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+          box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.06));
         }
         .stat-icon {
           font-size: 28px;
@@ -260,16 +260,17 @@ class DomolinkKeepActivePanel extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: rgba(2, 136, 209, 0.15);
-          color: #26c6da;
+          background: rgba(2, 136, 209, 0.12);
+          color: #0288d1;
         }
         .stat-val {
           font-size: 22px;
           font-weight: 700;
+          color: var(--primary-text-color, #212121);
         }
         .stat-label {
           font-size: 12px;
-          color: var(--secondary-text-color, #8e9ca8);
+          color: var(--secondary-text-color, #757575);
         }
 
         /* Cartes d'appareils */
@@ -279,20 +280,20 @@ class DomolinkKeepActivePanel extends HTMLElement {
           gap: 20px;
         }
         .card {
-          background: var(--card-background-color, #181e25);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--card-background-color, #ffffff);
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.1));
           border-radius: 14px;
           padding: 20px;
-          box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+          box-shadow: var(--ha-card-box-shadow, 0 4px 14px rgba(0,0,0,0.08));
           display: flex;
           flex-direction: column;
           gap: 16px;
           position: relative;
-          transition: border-color 0.2s ease;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
         .card.ota-active {
           border-color: #0288d1;
-          box-shadow: 0 0 20px rgba(2, 136, 209, 0.25);
+          box-shadow: 0 0 18px rgba(2, 136, 209, 0.28);
         }
 
         /* Entête de carte */
@@ -314,10 +315,11 @@ class DomolinkKeepActivePanel extends HTMLElement {
           display: flex;
           align-items: center;
           gap: 8px;
+          color: var(--primary-text-color, #212121);
         }
         .card-subtitle {
           font-size: 12px;
-          color: var(--secondary-text-color, #8e9ca8);
+          color: var(--secondary-text-color, #757575);
           font-family: monospace;
         }
 
@@ -336,26 +338,27 @@ class DomolinkKeepActivePanel extends HTMLElement {
           align-items: center;
           gap: 4px;
         }
-        .badge-on { background: rgba(76, 175, 80, 0.15); color: #66bb6a; border: 1px solid rgba(76, 175, 80, 0.3); }
-        .badge-off { background: rgba(255, 255, 255, 0.05); color: #b0bec5; border: 1px solid rgba(255, 255, 255, 0.1); }
-        .badge-unavail { background: rgba(244, 67, 54, 0.15); color: #ef5350; border: 1px solid rgba(244, 67, 54, 0.3); }
-        .badge-battery { background: rgba(255, 152, 0, 0.12); color: #ffa726; border: 1px solid rgba(255, 152, 0, 0.25); }
-        .badge-lqi { background: rgba(33, 150, 243, 0.12); color: #42a5f5; border: 1px solid rgba(33, 150, 243, 0.25); }
+        .badge-on { background: rgba(76, 175, 80, 0.15); color: #2e7d32; border: 1px solid rgba(76, 175, 80, 0.35); }
+        .badge-off { background: var(--secondary-background-color, rgba(125, 125, 125, 0.1)); color: var(--secondary-text-color, #616161); border: 1px solid var(--divider-color, rgba(125, 125, 125, 0.2)); }
+        .badge-unavail { background: rgba(244, 67, 54, 0.15); color: #c62828; border: 1px solid rgba(244, 67, 54, 0.35); }
+        .badge-battery { background: rgba(255, 152, 0, 0.15); color: #e65100; border: 1px solid rgba(255, 152, 0, 0.3); }
+        .badge-lqi { background: rgba(33, 150, 243, 0.15); color: #0277bd; border: 1px solid rgba(33, 150, 243, 0.3); }
 
         /* Bandeau Firmware */
         .firmware-banner {
-          background: rgba(255, 152, 0, 0.08);
-          border: 1px solid rgba(255, 152, 0, 0.25);
+          background: rgba(255, 152, 0, 0.1);
+          border: 1px solid rgba(255, 152, 0, 0.35);
           border-radius: 8px;
           padding: 10px 12px;
           display: flex;
           flex-direction: column;
           gap: 8px;
           font-size: 12px;
+          color: var(--primary-text-color, #212121);
         }
         .firmware-banner.in-progress {
-          background: rgba(2, 136, 209, 0.12);
-          border-color: rgba(2, 136, 209, 0.35);
+          background: rgba(2, 136, 209, 0.1);
+          border-color: rgba(2, 136, 209, 0.4);
         }
         .fw-top-row {
           display: flex;
@@ -368,23 +371,23 @@ class DomolinkKeepActivePanel extends HTMLElement {
           font-family: monospace;
           font-size: 12px;
           font-weight: 700;
-          color: #26c6da;
-          background: rgba(38, 198, 218, 0.15);
+          color: #0277bd;
+          background: rgba(2, 136, 209, 0.12);
           padding: 2px 8px;
           border-radius: 6px;
-          border: 1px solid rgba(38, 198, 218, 0.3);
+          border: 1px solid rgba(2, 136, 209, 0.35);
         }
         .fw-progress-track {
           width: 100%;
           height: 8px;
-          background: rgba(255, 255, 255, 0.12);
+          background: var(--divider-color, rgba(0, 0, 0, 0.12));
           border-radius: 4px;
           overflow: hidden;
           position: relative;
         }
         .fw-progress-fill {
           height: 100%;
-          background: linear-gradient(90deg, #0288d1, #26c6da, #00e676);
+          background: linear-gradient(90deg, #0288d1, #00acc1, #43a047);
           border-radius: 4px;
           transition: width 0.4s ease;
         }
@@ -409,10 +412,24 @@ class DomolinkKeepActivePanel extends HTMLElement {
           font-weight: 600;
         }
 
+        /* Encadré Astuce ZHA */
+        .zha-hint-box {
+          background: rgba(2, 136, 209, 0.08);
+          border: 1px solid rgba(2, 136, 209, 0.35);
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 12px;
+          color: var(--primary-text-color, #1a237e);
+          line-height: 1.45;
+        }
+        .zha-hint-box strong {
+          color: #0277bd;
+        }
+
         /* BLOC OTA KEEP-AWAKE */
         .ota-box {
-          background: rgba(0, 0, 0, 0.22);
-          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: var(--secondary-background-color, rgba(0, 0, 0, 0.03));
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
           border-radius: 10px;
           padding: 14px;
           display: flex;
@@ -429,7 +446,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.5px;
-          color: #26c6da;
+          color: var(--primary-color, #0288d1);
           display: flex;
           align-items: center;
           gap: 6px;
@@ -472,16 +489,17 @@ class DomolinkKeepActivePanel extends HTMLElement {
           justify-content: space-between;
           align-items: center;
           font-size: 12px;
-          background: rgba(2, 136, 209, 0.12);
+          background: rgba(2, 136, 209, 0.08);
           border: 1px solid rgba(2, 136, 209, 0.3);
           border-radius: 6px;
           padding: 8px 12px;
+          color: var(--primary-text-color, #212121);
         }
         .ota-timer-text {
           font-family: monospace;
           font-size: 15px;
-          font-weight: 700;
-          color: #4fc3f7;
+          font-weight: 800;
+          color: #0277bd;
         }
 
         /* Sliders */
@@ -495,18 +513,19 @@ class DomolinkKeepActivePanel extends HTMLElement {
           justify-content: space-between;
           font-size: 12px;
           font-weight: 600;
-          color: var(--secondary-text-color, #b0bec5);
+          color: var(--primary-text-color, #37474f);
         }
         .slider-val-tag {
-          color: #26c6da;
+          color: #0288d1;
           font-family: monospace;
+          font-weight: 700;
         }
         .range-slider {
           -webkit-appearance: none;
           width: 100%;
           height: 6px;
           border-radius: 3px;
-          background: rgba(255, 255, 255, 0.12);
+          background: var(--divider-color, rgba(0, 0, 0, 0.15));
           outline: none;
         }
         .range-slider::-webkit-slider-thumb {
@@ -515,9 +534,9 @@ class DomolinkKeepActivePanel extends HTMLElement {
           width: 16px;
           height: 16px;
           border-radius: 50%;
-          background: #26c6da;
+          background: #0288d1;
           cursor: pointer;
-          box-shadow: 0 0 6px rgba(38, 198, 218, 0.6);
+          box-shadow: 0 0 6px rgba(2, 136, 209, 0.5);
         }
 
         /* Pied de carte */
@@ -526,11 +545,11 @@ class DomolinkKeepActivePanel extends HTMLElement {
           justify-content: space-between;
           align-items: center;
           padding-top: 10px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
           font-size: 12px;
         }
         .sentinel-summary {
-          color: var(--secondary-text-color, #78909c);
+          color: var(--secondary-text-color, #757575);
           font-size: 11px;
         }
         .card-actions {
@@ -538,30 +557,32 @@ class DomolinkKeepActivePanel extends HTMLElement {
           gap: 8px;
         }
         .icon-btn {
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: var(--primary-text-color, #fff);
+          background: var(--secondary-background-color, rgba(125, 125, 125, 0.1));
+          border: 1px solid var(--divider-color, rgba(125, 125, 125, 0.2));
+          color: var(--primary-text-color, #212121);
           padding: 6px 10px;
           border-radius: 6px;
           cursor: pointer;
           font-size: 12px;
+          font-weight: 500;
         }
         .icon-btn:hover {
-          background: rgba(255, 255, 255, 0.12);
+          background: var(--divider-color, rgba(125, 125, 125, 0.2));
         }
         .icon-btn.btn-del:hover {
-          background: rgba(244, 67, 54, 0.2);
-          border-color: rgba(244, 67, 54, 0.4);
-          color: #ef5350;
+          background: rgba(244, 67, 54, 0.15);
+          border-color: rgba(244, 67, 54, 0.35);
+          color: #c62828;
         }
 
         /* Tiroir des Logs en direct */
         .logs-section {
           margin-top: 28px;
-          background: var(--card-background-color, #181e25);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--card-background-color, #ffffff);
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.1));
           border-radius: 12px;
           padding: 16px 20px;
+          color: var(--primary-text-color, #212121);
         }
         .logs-header {
           display: flex;
@@ -571,7 +592,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
         }
         .logs-list {
           margin-top: 12px;
-          max-height: 200px;
+          max-height: 220px;
           overflow-y: auto;
           font-family: monospace;
           font-size: 12px;
@@ -580,24 +601,78 @@ class DomolinkKeepActivePanel extends HTMLElement {
           gap: 6px;
         }
         .log-item {
-          padding: 4px 8px;
-          border-radius: 4px;
-          background: rgba(0, 0, 0, 0.2);
+          padding: 6px 10px;
+          border-radius: 6px;
+          background: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
           display: flex;
           gap: 12px;
+          color: var(--primary-text-color, #212121);
         }
-        .log-time { color: #78909c; }
-        .log-msg.success { color: #81c784; }
-        .log-msg.warning { color: #ffb74d; }
-        .log-msg.info { color: #64b5f6; }
+        .log-time { color: var(--secondary-text-color, #757575); }
+        .log-msg.success { color: #2e7d32; font-weight: 600; }
+        .log-msg.warning { color: #e65100; font-weight: 600; }
+        .log-msg.info { color: #0277bd; font-weight: 600; }
+        .log-msg.debug { color: var(--primary-text-color, #37474f); }
 
         /* MODAL */
         .modal-overlay {
           position: fixed;
           top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0, 0, 0, 0.7);
+          background: rgba(0, 0, 0, 0.65);
           backdrop-filter: blur(4px);
           display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          padding: 20px;
+        }
+        .modal-card {
+          background: var(--card-background-color, #ffffff);
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
+          border-radius: 14px;
+          max-width: 540px;
+          width: 100%;
+          max-height: 90vh;
+          overflow-y: auto;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+          color: var(--primary-text-color, #212121);
+        }
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .form-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--primary-text-color, #37474f);
+        }
+        .form-input, .form-select {
+          background: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
+          border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
+          color: var(--primary-text-color, #212121);
+          padding: 9px 12px;
+          border-radius: 6px;
+          font-size: 14px;
+          outline: none;
+        }
+        .form-checkbox-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 13px;
+          color: var(--primary-text-color, #212121);
+        }
+        .modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-top: 12px;
+        }
           align-items: center;
           justify-content: center;
           z-index: 9999;
@@ -825,7 +900,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
                 : ""
             }
           </div>
-          <div style="background: rgba(2, 136, 209, 0.12); border: 1px solid rgba(2, 136, 209, 0.35); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #b3e5fc; line-height: 1.4;">
+          <div class="zha-hint-box">
             💡 <strong>Important pour démarrer l'OTA (ZHA)</strong> : Dès que la fenêtre affiche <em>« Preparing »</em>, appuyez <strong>1 fois brièvement sur le bouton du capteur</strong> (ou passez la main devant le radar) pour déclencher son réveil radio initial et engager le transfert du firmware !
           </div>
         `
@@ -836,7 +911,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
         <div class="ota-box">
           <div class="ota-header-row">
             <span class="ota-title">⚡ DÉFIBRILLATEUR OTA (KEEP-AWAKE)</span>
-            ${isActive ? `<span style="font-size:11px; color:#4fc3f7; font-weight:700;">DÉFIBRILLATION ACTIVE</span>` : ""}
+            ${isActive ? `<span style="font-size:11px; color:#0288d1; font-weight:700;">DÉFIBRILLATION ACTIVE</span>` : ""}
           </div>
 
           <!-- Bouton Toggle Principal -->
@@ -854,9 +929,14 @@ class DomolinkKeepActivePanel extends HTMLElement {
               <div>
                 Temps restant : <span class="ota-timer-text timer-display" data-rule-id="${rId}">${this._formatTime(remaining)}</span>
               </div>
-              <button class="icon-btn btn-ping-now" data-rule-id="${rId}" title="Envoyer un ping immédiat">
-                ⚡ Ping (${session.ping_count || 0})
-              </button>
+              <div style="display:flex; gap:6px;">
+                <button class="icon-btn btn-extend-ota" data-rule-id="${rId}" title="Prolonger la session de 15 minutes">
+                  ➕ 15 min
+                </button>
+                <button class="icon-btn btn-ping-now" data-rule-id="${rId}" title="Envoyer un ping immédiat">
+                  ⚡ Ping (${session.ping_count || 0})
+                </button>
+              </div>
             </div>
           `
               : ""
@@ -923,6 +1003,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
       ping_interval: 5,
       ping_method: "auto",
       auto_ota_trigger: true,
+      on_ota_failure: "keep_alive",
+      on_ota_timeout: "auto_extend",
     };
 
     return `
@@ -951,7 +1033,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
             <input type="text" class="form-input" id="modalName" placeholder="Ex: Détecteur Salon" value="${r.name || ""}" />
           </div>
 
-          <h3 style="margin-bottom:0; color:#26c6da; font-size:14px;">Paramètres OTA Keep-Awake</h3>
+          <h3 style="margin-bottom:0; color:#0288d1; font-size:14px;">Paramètres OTA Keep-Awake</h3>
 
           <div class="form-group">
             <label class="form-label">Durée totale OTA (10 à 90 min) : <span id="modalDurVal">${r.ota_duration || 30} min</span></label>
@@ -975,10 +1057,27 @@ class DomolinkKeepActivePanel extends HTMLElement {
 
           <div class="form-checkbox-row">
             <input type="checkbox" id="modalAutoOta" ${r.auto_ota_trigger ? "checked" : ""} />
-            <label for="modalAutoOta">Activer automatiquement le Keep-Awake dès qu'une mise à jour firmware démarre</label>
+            <label for="modalAutoOta">Activer automatiquement le Keep-Awake dès qu'une mise à jour démarre</label>
           </div>
 
-          <h3 style="margin-bottom:0; color:#26c6da; font-size:14px;">Paramètres Proxy Sentinelle</h3>
+          <div class="form-group">
+            <label class="form-label">Comportement si la mise à jour échoue</label>
+            <select class="form-select" id="modalOnOtaFailure">
+              <option value="keep_alive" ${r.on_ota_failure === "keep_alive" || !r.on_ota_failure ? "selected" : ""}>Maintenir le défibrillateur actif pour relancer (Recommandé)</option>
+              <option value="stop" ${r.on_ota_failure === "stop" ? "selected" : ""}>Arrêter immédiatement le défibrillateur (économise la batterie)</option>
+              <option value="retry" ${r.on_ota_failure === "retry" ? "selected" : ""}>Relancer automatiquement l'OTA (max 2 fois)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Comportement si le minuteur expire pendant l'OTA</label>
+            <select class="form-select" id="modalOnOtaTimeout">
+              <option value="auto_extend" ${r.on_ota_timeout === "auto_extend" || !r.on_ota_timeout ? "selected" : ""}>Prolonger de +15 min si toujours en cours (Recommandé)</option>
+              <option value="stop" ${r.on_ota_timeout === "stop" ? "selected" : ""}>Arrêter strictement à l'échéance du temps</option>
+            </select>
+          </div>
+
+          <h3 style="margin-bottom:0; color:#0288d1; font-size:14px;">Paramètres Proxy Sentinelle</h3>
 
           <div style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
@@ -1110,6 +1209,14 @@ class DomolinkKeepActivePanel extends HTMLElement {
       };
     });
 
+    // Prolonger session OTA de 15 min
+    this.shadowRoot.querySelectorAll(".btn-extend-ota").forEach((btn) => {
+      btn.onclick = () => {
+        const rId = btn.dataset.ruleId;
+        this._apiCall("extend_ota", { rule_id: rId, minutes: 15 });
+      };
+    });
+
     // Lancer MAJ et Maintien
     this.shadowRoot.querySelectorAll(".btn-install-ota").forEach((btn) => {
       btn.onclick = () => {
@@ -1205,6 +1312,12 @@ class DomolinkKeepActivePanel extends HTMLElement {
         const otaInt = parseInt(this.shadowRoot.getElementById("modalOtaInt").value);
         const pingMeth = this.shadowRoot.getElementById("modalPingMethod").value;
         const autoOta = this.shadowRoot.getElementById("modalAutoOta").checked;
+        const onOtaFailure = this.shadowRoot.getElementById("modalOnOtaFailure")
+          ? this.shadowRoot.getElementById("modalOnOtaFailure").value
+          : "keep_alive";
+        const onOtaTimeout = this.shadowRoot.getElementById("modalOnOtaTimeout")
+          ? this.shadowRoot.getElementById("modalOnOtaTimeout").value
+          : "auto_extend";
         const hold = parseInt(this.shadowRoot.getElementById("modalHold").value);
         const grace = parseInt(this.shadowRoot.getElementById("modalGrace").value);
         const optimistic = this.shadowRoot.getElementById("modalOptimistic").checked;
@@ -1220,6 +1333,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
           ping_interval: otaInt,
           ping_method: pingMeth,
           auto_ota_trigger: autoOta,
+          on_ota_failure: onOtaFailure,
+          on_ota_timeout: onOtaTimeout,
         });
 
         this._closeModal();

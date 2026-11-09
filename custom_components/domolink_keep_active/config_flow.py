@@ -20,6 +20,8 @@ from .const import (
     CONF_GRACE_PERIOD,
     CONF_HOLD_DURATION,
     CONF_NAME,
+    CONF_ON_OTA_FAILURE,
+    CONF_ON_OTA_TIMEOUT,
     CONF_OPTIMISTIC,
     CONF_OTA_DURATION,
     CONF_PING_INTERVAL,
@@ -30,6 +32,8 @@ from .const import (
     DEFAULT_AUTO_OTA_TRIGGER,
     DEFAULT_GRACE_PERIOD,
     DEFAULT_HOLD_DURATION,
+    DEFAULT_ON_OTA_FAILURE,
+    DEFAULT_ON_OTA_TIMEOUT,
     DEFAULT_OPTIMISTIC,
     DEFAULT_OTA_DURATION,
     DEFAULT_PING_INTERVAL,
@@ -39,6 +43,11 @@ from .const import (
     MAX_PING_INTERVAL,
     MIN_OTA_DURATION,
     MIN_PING_INTERVAL,
+    OTA_FAILURE_KEEP_ALIVE,
+    OTA_FAILURE_RETRY,
+    OTA_FAILURE_STOP,
+    OTA_TIMEOUT_EXTEND,
+    OTA_TIMEOUT_STOP,
     PING_METHODS,
     SUPPORTED_DOMAINS,
 )
@@ -146,6 +155,29 @@ class DomoLinkKeepActiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_AUTO_OTA_TRIGGER, default=DEFAULT_AUTO_OTA_TRIGGER
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_ON_OTA_FAILURE, default=DEFAULT_ON_OTA_FAILURE
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=OTA_FAILURE_KEEP_ALIVE, label="Maintenir actif pour relancer (Recommandé)"),
+                            selector.SelectOptionDict(value=OTA_FAILURE_STOP, label="Arrêter immédiatement le défibrillateur"),
+                            selector.SelectOptionDict(value=OTA_FAILURE_RETRY, label="Relancer automatiquement l'OTA (max 2 fois)"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ON_OTA_TIMEOUT, default=DEFAULT_ON_OTA_TIMEOUT
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=OTA_TIMEOUT_EXTEND, label="Prolonger de +15 min si toujours en cours (Recommandé)"),
+                            selector.SelectOptionDict(value=OTA_TIMEOUT_STOP, label="Arrêter strictement à l'échéance"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 
@@ -377,6 +409,29 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_AUTO_OTA_TRIGGER, default=DEFAULT_AUTO_OTA_TRIGGER
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_ON_OTA_FAILURE, default=DEFAULT_ON_OTA_FAILURE
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=OTA_FAILURE_KEEP_ALIVE, label="Maintenir actif pour relancer (Recommandé)"),
+                            selector.SelectOptionDict(value=OTA_FAILURE_STOP, label="Arrêter immédiatement le défibrillateur"),
+                            selector.SelectOptionDict(value=OTA_FAILURE_RETRY, label="Relancer automatiquement l'OTA (max 2 fois)"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ON_OTA_TIMEOUT, default=DEFAULT_ON_OTA_TIMEOUT
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=OTA_TIMEOUT_EXTEND, label="Prolonger de +15 min si toujours en cours (Recommandé)"),
+                            selector.SelectOptionDict(value=OTA_TIMEOUT_STOP, label="Arrêter strictement à l'échéance"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 
@@ -473,6 +528,14 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                                         r.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER),
                                     )
                                 ),
+                                CONF_ON_OTA_FAILURE: user_input.get(
+                                    CONF_ON_OTA_FAILURE,
+                                    r.get(CONF_ON_OTA_FAILURE, DEFAULT_ON_OTA_FAILURE),
+                                ),
+                                CONF_ON_OTA_TIMEOUT: user_input.get(
+                                    CONF_ON_OTA_TIMEOUT,
+                                    r.get(CONF_ON_OTA_TIMEOUT, DEFAULT_ON_OTA_TIMEOUT),
+                                ),
                             }
                         )
                     else:
@@ -553,6 +616,31 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_AUTO_OTA_TRIGGER,
                     default=current_rule.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER),
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_ON_OTA_FAILURE,
+                    default=current_rule.get(CONF_ON_OTA_FAILURE, DEFAULT_ON_OTA_FAILURE),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=OTA_FAILURE_KEEP_ALIVE, label="Maintenir actif pour relancer (Recommandé)"),
+                            selector.SelectOptionDict(value=OTA_FAILURE_STOP, label="Arrêter immédiatement le défibrillateur"),
+                            selector.SelectOptionDict(value=OTA_FAILURE_RETRY, label="Relancer automatiquement l'OTA (max 2 fois)"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ON_OTA_TIMEOUT,
+                    default=current_rule.get(CONF_ON_OTA_TIMEOUT, DEFAULT_ON_OTA_TIMEOUT),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=OTA_TIMEOUT_EXTEND, label="Prolonger de +15 min si toujours en cours (Recommandé)"),
+                            selector.SelectOptionDict(value=OTA_TIMEOUT_STOP, label="Arrêter strictement à l'échéance"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 

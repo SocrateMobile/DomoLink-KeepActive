@@ -12,7 +12,9 @@
           "optimistic": "Mode optimiste (retour d'état immédiat)",
           "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
           "ping_interval": "Intervalle entre chaque ping (secondes)",
-          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware"
+          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware",
+          "on_ota_failure": "Action en cas d'échec OTA",
+          "on_ota_timeout": "Action si le temps expire pendant l'OTA"
         }
       }
     },
@@ -51,7 +53,9 @@
           "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
           "ping_interval": "Intervalle entre chaque ping (secondes)",
           "ping_method": "Méthode d'envoi du ping de réveil",
-          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware"
+          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware",
+          "on_ota_failure": "Action en cas d'échec OTA",
+          "on_ota_timeout": "Action si le temps expire pendant l'OTA"
         }
       },
       "edit_select": {
@@ -73,7 +77,9 @@
           "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
           "ping_interval": "Intervalle entre chaque ping (secondes)",
           "ping_method": "Méthode d'envoi du ping de réveil",
-          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware"
+          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware",
+          "on_ota_failure": "Action en cas d'échec OTA",
+          "on_ota_timeout": "Action si le temps expire pendant l'OTA"
         }
       },
       "delete": {

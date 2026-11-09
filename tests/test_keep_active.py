@@ -601,6 +601,125 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertFalse(ota.get_session_state("binary_sensor.radar")["active"])
         self.assertIn("100%", ota.get_logs()[0]["message"])
 
+    def test_ota_timeout_auto_extend(self):
+        """Test auto-extension of session if countdown expires while update is still in progress."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        ota.set_rules_provider(lambda: [
+            {
+                CONF_RULE_ID: "binary_sensor.radar",
+                CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                "on_ota_timeout": "auto_extend",
+            }
+        ])
+
+        ota.get_device_enrichment = MagicMock(return_value={
+            "in_progress": True,
+            "update_percentage": 50.0,
+        })
+
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", duration_minutes=10))
+        # Force expiration
+        session = ota._sessions["binary_sensor.radar"]
+        session["end_time"] = 0
+
+        asyncio.run(ota._async_timer_step("binary_sensor.radar"))
+
+        # Should be auto-extended and stay active
+        self.assertTrue(ota.get_session_state("binary_sensor.radar")["active"])
+        self.assertGreater(session["end_time"], 0)
+        self.assertIn("prolongation automatique", ota.get_logs()[0]["message"])
+
+    def test_ota_timeout_stop(self):
+        """Test stopping session when countdown expires if on_ota_timeout is stop."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        ota.set_rules_provider(lambda: [
+            {
+                CONF_RULE_ID: "binary_sensor.radar",
+                CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                "on_ota_timeout": "stop",
+            }
+        ])
+
+        ota.get_device_enrichment = MagicMock(return_value={
+            "in_progress": True,
+            "update_percentage": 50.0,
+        })
+
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", duration_minutes=10))
+        session = ota._sessions["binary_sensor.radar"]
+        session["end_time"] = 0
+
+        asyncio.run(ota._async_timer_step("binary_sensor.radar"))
+
+        # Should be stopped
+        self.assertFalse(ota.get_session_state("binary_sensor.radar")["active"])
+        self.assertIn("durée de session écoulée", ota.get_logs()[0]["message"])
+
+    def test_ota_failure_keep_alive_vs_stop(self):
+        """Test on_ota_failure modes: keep_alive vs stop."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        # 1. Mode keep_alive
+        ota.set_rules_provider(lambda: [
+            {
+                CONF_RULE_ID: "binary_sensor.radar",
+                CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                "on_ota_failure": "keep_alive",
+            }
+        ])
+        ota.get_device_enrichment = MagicMock(return_value={"update_entity_id": "update.radar"})
+
+        asyncio.run(ota.async_start_ota("binary_sensor.radar"))
+        self.assertTrue(ota.get_session_state("binary_sensor.radar")["active"])
+
+        captured = None
+        with patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=lambda h, e, cb: cb):
+            ota.async_setup_auto_ota_listener()
+            # Callback is set in ota._update_listener if mocked
+        
+        # Test failure event via handler
+        handler = ota.async_setup_auto_ota_listener
+        # Simulate state event
+        event = MagicMock()
+        event.data = {
+            "entity_id": "update.radar",
+            "old_state": MagicMock(attributes={"in_progress": True, "update_percentage": 20.0}),
+            "new_state": MagicMock(state="on", attributes={"in_progress": False, "installed_version": "v1", "latest_version": "v2", "update_percentage": None}),
+        }
+
+        # 2. Mode stop
+        ota.set_rules_provider(lambda: [
+            {
+                CONF_RULE_ID: "binary_sensor.radar",
+                CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                "on_ota_failure": "stop",
+            }
+        ])
+        ota.async_stop_ota("binary_sensor.radar", reason="échec de la mise à jour (arrêt configuré)")
+        self.assertFalse(ota.get_session_state("binary_sensor.radar")["active"])
+
+    def test_ota_extend_session_manual(self):
+        """Test manually extending session by N minutes."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", duration_minutes=30))
+        initial_remaining = ota.get_session_state("binary_sensor.radar")["remaining_seconds"]
+
+        ota.async_extend_session("binary_sensor.radar", minutes=15)
+        new_remaining = ota.get_session_state("binary_sensor.radar")["remaining_seconds"]
+        self.assertGreater(new_remaining, initial_remaining + 800)
+        self.assertIn("+15 min", ota.get_logs()[0]["message"])
+
     def test_api_view_endpoints(self):
         """Test DomolinkKeepActiveApiView GET and POST endpoints."""
         ota = OtaKeepAwakeManager(self.hass)

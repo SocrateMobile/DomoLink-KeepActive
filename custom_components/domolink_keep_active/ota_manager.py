@@ -15,17 +15,28 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from .const import (
+    AUTO_EXTEND_MINUTES,
     CONF_AUTO_OTA_TRIGGER,
+    CONF_ON_OTA_FAILURE,
+    CONF_ON_OTA_TIMEOUT,
     CONF_OTA_DURATION,
     CONF_PING_INTERVAL,
     CONF_PING_METHOD,
     CONF_RULE_ID,
     CONF_SOURCE_ENTITY,
     DEFAULT_AUTO_OTA_TRIGGER,
+    DEFAULT_ON_OTA_FAILURE,
+    DEFAULT_ON_OTA_TIMEOUT,
     DEFAULT_OTA_DURATION,
     DEFAULT_PING_INTERVAL,
     DEFAULT_PING_METHOD,
     DOMAIN,
+    MAX_OTA_RETRIES,
+    OTA_FAILURE_KEEP_ALIVE,
+    OTA_FAILURE_RETRY,
+    OTA_FAILURE_STOP,
+    OTA_TIMEOUT_EXTEND,
+    OTA_TIMEOUT_STOP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -197,11 +208,57 @@ class OtaKeepAwakeManager:
 
         now = time.time()
         if now >= session.get("end_time", now):
+            rule = self._find_rule(rule_id)
+            on_timeout = (
+                rule.get(CONF_ON_OTA_TIMEOUT, DEFAULT_ON_OTA_TIMEOUT)
+                if rule
+                else DEFAULT_ON_OTA_TIMEOUT
+            )
+            source = session.get("source_entity", rule_id)
+            enrich = self.get_device_enrichment(source)
+
+            # Check if OTA update is still in progress
+            if enrich.get("in_progress") and on_timeout == OTA_TIMEOUT_EXTEND:
+                session["end_time"] = now + (AUTO_EXTEND_MINUTES * 60)
+                session["duration_minutes"] = (
+                    session.get("duration_minutes", DEFAULT_OTA_DURATION) + AUTO_EXTEND_MINUTES
+                )
+                pct_str = (
+                    f" ({enrich.get('update_percentage')}%)"
+                    if enrich.get("update_percentage") is not None
+                    else ""
+                )
+                self._add_log(
+                    rule_id,
+                    f"⏳ Temps initial écoulé mais transfert OTA toujours en cours{pct_str} : prolongation automatique de +{AUTO_EXTEND_MINUTES} min !",
+                    "warning",
+                )
+                self._schedule_next_ping(rule_id)
+                return
+
             self.async_stop_ota(rule_id, reason="durée de session écoulée")
             return
 
         await self.async_send_ping(rule_id)
         self._schedule_next_ping(rule_id)
+
+    def async_extend_session(self, rule_id: str, minutes: int = AUTO_EXTEND_MINUTES) -> dict[str, Any]:
+        """Manually extend an active OTA session by N minutes."""
+        session = self._sessions.get(rule_id)
+        if not session or not session.get("active"):
+            return self.get_session_state(rule_id)
+
+        now = time.time()
+        cur_end = session.get("end_time", now)
+        base = max(cur_end, now)
+        session["end_time"] = base + (minutes * 60)
+        session["duration_minutes"] = session.get("duration_minutes", DEFAULT_OTA_DURATION) + minutes
+        self._add_log(
+            rule_id,
+            f"➕ Session prolongée manuellement de +{minutes} min",
+            "info",
+        )
+        return self.get_session_state(rule_id)
 
     def async_stop_ota(self, rule_id: str, reason: str = "manuel") -> dict[str, Any]:
         """Stop an active Keep-Awake session."""
@@ -500,7 +557,59 @@ class OtaKeepAwakeManager:
                         self.async_stop_ota(rule_id, reason="mise à jour terminée (100%)")
                         continue
 
-                    # 2. Auto-start on update launch if enabled in rule
+                    # 2. Handle update failure / cancellation (not completed)
+                    if not new_in_progress and old_in_progress and not is_completed and session.get("active"):
+                        on_failure = rule.get(CONF_ON_OTA_FAILURE, DEFAULT_ON_OTA_FAILURE)
+                        raw_session = self._sessions.get(rule_id, {})
+
+                        if on_failure == OTA_FAILURE_STOP:
+                            self._add_log(
+                                rule_id,
+                                f"🛑 Échec ou interruption de la mise à jour sur {entity_id}. Arrêt du défibrillateur (comportement configuré).",
+                                "warning",
+                            )
+                            self.async_stop_ota(rule_id, reason="échec de la mise à jour (arrêt configuré)")
+                            continue
+
+                        elif on_failure == OTA_FAILURE_RETRY:
+                            retries = raw_session.get("retry_count", 0)
+                            if retries < MAX_OTA_RETRIES:
+                                raw_session["retry_count"] = retries + 1
+                                self._add_log(
+                                    rule_id,
+                                    f"⚠️ Échec du transfert sur {entity_id}. Relance automatique #{raw_session['retry_count']}/{MAX_OTA_RETRIES} dans 10 secondes...",
+                                    "warning",
+                                )
+
+                                @callback
+                                def _delayed_retry(_now: Any) -> None:
+                                    self.hass.async_create_task(
+                                        self.hass.services.async_call(
+                                            "update",
+                                            "install",
+                                            {ATTR_ENTITY_ID: entity_id},
+                                            blocking=False,
+                                        )
+                                    )
+
+                                async_call_later(self.hass, 10, _delayed_retry)
+                            else:
+                                self._add_log(
+                                    rule_id,
+                                    f"❌ Nombre maximal de relances ({MAX_OTA_RETRIES}) atteint sur {entity_id}. Arrêt du défibrillateur.",
+                                    "warning",
+                                )
+                                self.async_stop_ota(rule_id, reason="échec après tentatives max")
+                            continue
+
+                        else:  # OTA_FAILURE_KEEP_ALIVE (default)
+                            self._add_log(
+                                rule_id,
+                                f"⚠️ Échec ou mise en pause de la mise à jour sur {entity_id}. Le Défibrillateur reste ACTIF pour vous permettre de réveiller le capteur et relancer.",
+                                "warning",
+                            )
+
+                    # 3. Auto-start on update launch if enabled in rule
                     if rule.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER):
                         if new_in_progress and not old_in_progress:
                             self._add_log(
@@ -511,14 +620,6 @@ class OtaKeepAwakeManager:
                             self.hass.async_create_task(
                                 self.async_start_ota(rule_id, auto_triggered=True)
                             )
-                        # Stop if auto-triggered session and update cancelled / ended
-                        elif not new_in_progress and old_in_progress and session.get("auto_triggered"):
-                            self._add_log(
-                                rule_id,
-                                f"ℹ️ Fin de transfert détectée sur {entity_id}.",
-                                "info",
-                            )
-                            self.async_stop_ota(rule_id, reason="mise à jour terminée")
 
         self._update_listener = async_track_state_change_event(
             self.hass,
