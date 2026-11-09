@@ -3,13 +3,16 @@
     "step": {
       "user": {
         "title": "Ajouter une entité KeepActive",
-        "description": "Sélectionnez l'entité source (Zigbee ou autre) à sécuriser et configurez les temporisations de maintien et de grâce.",
+        "description": "Sélectionnez l'entité source (Zigbee ou autre) à sécuriser et configurez les temporisations de maintien, de grâce et les paramètres de maintien éveillé OTA.",
         "data": {
           "source_entity": "Entité source",
           "name": "Nom personnalisé (optionnel)",
           "hold_duration": "Durée de maintien actif (secondes)",
           "grace_period": "Période de grâce indisponibilité (secondes)",
-          "optimistic": "Mode optimiste (retour d'état immédiat)"
+          "optimistic": "Mode optimiste (retour d'état immédiat)",
+          "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
+          "ping_interval": "Intervalle entre chaque ping (secondes)",
+          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware"
         }
       }
     },
@@ -38,13 +41,17 @@
       },
       "add": {
         "title": "Ajouter une entité KeepActive",
-        "description": "Sélectionnez l'entité source (Zigbee ou autre) à sécuriser et configurez les temporisations de maintien et de grâce.",
+        "description": "Sélectionnez l'entité source et configurez les délais de protection et le moteur OTA Keep-Awake.",
         "data": {
           "source_entity": "Entité source",
           "name": "Nom personnalisé (optionnel)",
           "hold_duration": "Durée de maintien actif (secondes)",
           "grace_period": "Période de grâce indisponibilité (secondes)",
-          "optimistic": "Mode optimiste (retour d'état immédiat)"
+          "optimistic": "Mode optimiste (retour d'état immédiat)",
+          "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
+          "ping_interval": "Intervalle entre chaque ping (secondes)",
+          "ping_method": "Méthode d'envoi du ping de réveil",
+          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware"
         }
       },
       "edit_select": {
@@ -62,7 +69,11 @@
           "name": "Nom personnalisé",
           "hold_duration": "Durée de maintien actif (secondes)",
           "grace_period": "Période de grâce indisponibilité (secondes)",
-          "optimistic": "Mode optimiste (retour d'état immédiat)"
+          "optimistic": "Mode optimiste (retour d'état immédiat)",
+          "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
+          "ping_interval": "Intervalle entre chaque ping (secondes)",
+          "ping_method": "Méthode d'envoi du ping de réveil",
+          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware"
         }
       },
       "delete": {

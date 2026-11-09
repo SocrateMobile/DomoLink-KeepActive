@@ -3,13 +3,16 @@
     "step": {
       "user": {
         "title": "Add a KeepActive Entity",
-        "description": "Select the source entity (Zigbee or other) to protect and configure hold and grace delays.",
+        "description": "Select the source entity (Zigbee or other) to protect and configure hold, grace and OTA keep-awake parameters.",
         "data": {
           "source_entity": "Source entity",
           "name": "Custom name (optional)",
           "hold_duration": "Active hold duration (seconds)",
           "grace_period": "Dropout grace period (seconds)",
-          "optimistic": "Optimistic mode (immediate state feedback)"
+          "optimistic": "Optimistic mode (immediate state feedback)",
+          "ota_duration": "Total OTA keep-awake duration (minutes)",
+          "ping_interval": "Ping interval (seconds)",
+          "auto_ota_trigger": "Auto-activate on firmware update"
         }
       }
     },
@@ -38,13 +41,17 @@
       },
       "add": {
         "title": "Add a KeepActive Entity",
-        "description": "Select the source entity to protect and configure hold and grace delays.",
+        "description": "Select the source entity and configure protection delays and the OTA Keep-Awake engine.",
         "data": {
           "source_entity": "Source entity",
           "name": "Custom name (optional)",
           "hold_duration": "Active hold duration (seconds)",
           "grace_period": "Dropout grace period (seconds)",
-          "optimistic": "Optimistic mode (immediate state feedback)"
+          "optimistic": "Optimistic mode (immediate state feedback)",
+          "ota_duration": "Total OTA keep-awake duration (minutes)",
+          "ping_interval": "Ping interval (seconds)",
+          "ping_method": "Wakeup ping transmission method",
+          "auto_ota_trigger": "Auto-activate on firmware update"
         }
       },
       "edit_select": {
@@ -62,7 +69,11 @@
           "name": "Custom name",
           "hold_duration": "Active hold duration (seconds)",
           "grace_period": "Dropout grace period (seconds)",
-          "optimistic": "Optimistic mode (immediate state feedback)"
+          "optimistic": "Optimistic mode (immediate state feedback)",
+          "ota_duration": "Total OTA keep-awake duration (minutes)",
+          "ping_interval": "Ping interval (seconds)",
+          "ping_method": "Wakeup ping transmission method",
+          "auto_ota_trigger": "Auto-activate on firmware update"
         }
       },
       "delete": {

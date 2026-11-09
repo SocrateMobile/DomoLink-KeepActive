@@ -16,20 +16,38 @@ from .const import (
     ACTION_DELETE,
     ACTION_EDIT,
     ACTION_VIEW,
+    CONF_AUTO_OTA_TRIGGER,
     CONF_GRACE_PERIOD,
     CONF_HOLD_DURATION,
     CONF_NAME,
     CONF_OPTIMISTIC,
+    CONF_OTA_DURATION,
+    CONF_PING_INTERVAL,
+    CONF_PING_METHOD,
     CONF_RULES,
     CONF_RULE_ID,
     CONF_SOURCE_ENTITY,
+    DEFAULT_AUTO_OTA_TRIGGER,
     DEFAULT_GRACE_PERIOD,
     DEFAULT_HOLD_DURATION,
     DEFAULT_OPTIMISTIC,
+    DEFAULT_OTA_DURATION,
+    DEFAULT_PING_INTERVAL,
+    DEFAULT_PING_METHOD,
     DOMAIN,
+    MAX_OTA_DURATION,
+    MAX_PING_INTERVAL,
+    MIN_OTA_DURATION,
+    MIN_PING_INTERVAL,
+    PING_METHODS,
     SUPPORTED_DOMAINS,
 )
-from .helpers import get_platform_from_entity, get_rules_from_entry
+from .helpers import (
+    get_platform_from_entity,
+    get_rules_from_entry,
+    normalize_ota_duration,
+    normalize_ping_interval,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +81,16 @@ class DomoLinkKeepActiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_HOLD_DURATION: user_input.get(CONF_HOLD_DURATION, DEFAULT_HOLD_DURATION),
                     CONF_GRACE_PERIOD: user_input.get(CONF_GRACE_PERIOD, DEFAULT_GRACE_PERIOD),
                     CONF_OPTIMISTIC: user_input.get(CONF_OPTIMISTIC, DEFAULT_OPTIMISTIC),
+                    CONF_OTA_DURATION: normalize_ota_duration(
+                        user_input.get(CONF_OTA_DURATION, DEFAULT_OTA_DURATION)
+                    ),
+                    CONF_PING_INTERVAL: normalize_ping_interval(
+                        user_input.get(CONF_PING_INTERVAL, DEFAULT_PING_INTERVAL)
+                    ),
+                    CONF_PING_METHOD: user_input.get(CONF_PING_METHOD, DEFAULT_PING_METHOD),
+                    CONF_AUTO_OTA_TRIGGER: bool(
+                        user_input.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER)
+                    ),
                 }
                 entry_data = {
                     **user_input,
@@ -92,6 +120,31 @@ class DomoLinkKeepActiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(
                     CONF_OPTIMISTIC, default=DEFAULT_OPTIMISTIC
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_OTA_DURATION, default=DEFAULT_OTA_DURATION
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_OTA_DURATION,
+                        max=MAX_OTA_DURATION,
+                        step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="min",
+                    )
+                ),
+                vol.Optional(
+                    CONF_PING_INTERVAL, default=DEFAULT_PING_INTERVAL
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_PING_INTERVAL,
+                        max=MAX_PING_INTERVAL,
+                        step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="s",
+                    )
+                ),
+                vol.Optional(
+                    CONF_AUTO_OTA_TRIGGER, default=DEFAULT_AUTO_OTA_TRIGGER
                 ): selector.BooleanSelector(),
             }
         )
@@ -194,8 +247,13 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
             hold = r.get(CONF_HOLD_DURATION, DEFAULT_HOLD_DURATION)
             grace = r.get(CONF_GRACE_PERIOD, DEFAULT_GRACE_PERIOD)
             optimistic = "Oui" if r.get(CONF_OPTIMISTIC, DEFAULT_OPTIMISTIC) else "Non"
+            ota_dur = r.get(CONF_OTA_DURATION, DEFAULT_OTA_DURATION)
+            ping_int = r.get(CONF_PING_INTERVAL, DEFAULT_PING_INTERVAL)
             domain = get_platform_from_entity(source)
-            summary_lines.append(f"{idx}. {name} ({source}) | Type: {domain} | Hold: {hold}s | Grâce: {grace}s | Optimiste: {optimistic}")
+            summary_lines.append(
+                f"{idx}. {name} ({source}) | Type: {domain} | Maintien: {hold}s | Grâce: {grace}s | "
+                f"OTA Max: {ota_dur}m | Ping: {ping_int}s | Optimiste: {optimistic}"
+            )
 
         summary = "\n".join(summary_lines) if summary_lines else "Aucune entité configurée."
 
@@ -243,6 +301,16 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_HOLD_DURATION: user_input.get(CONF_HOLD_DURATION, DEFAULT_HOLD_DURATION),
                         CONF_GRACE_PERIOD: user_input.get(CONF_GRACE_PERIOD, DEFAULT_GRACE_PERIOD),
                         CONF_OPTIMISTIC: user_input.get(CONF_OPTIMISTIC, DEFAULT_OPTIMISTIC),
+                        CONF_OTA_DURATION: normalize_ota_duration(
+                            user_input.get(CONF_OTA_DURATION, DEFAULT_OTA_DURATION)
+                        ),
+                        CONF_PING_INTERVAL: normalize_ping_interval(
+                            user_input.get(CONF_PING_INTERVAL, DEFAULT_PING_INTERVAL)
+                        ),
+                        CONF_PING_METHOD: user_input.get(CONF_PING_METHOD, DEFAULT_PING_METHOD),
+                        CONF_AUTO_OTA_TRIGGER: bool(
+                            user_input.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER)
+                        ),
                     }
                     rules.append(new_rule)
                     new_options = {**self.config_entry.options, CONF_RULES: rules}
@@ -270,6 +338,44 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     CONF_OPTIMISTIC, default=DEFAULT_OPTIMISTIC
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_OTA_DURATION, default=DEFAULT_OTA_DURATION
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_OTA_DURATION,
+                        max=MAX_OTA_DURATION,
+                        step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="min",
+                    )
+                ),
+                vol.Optional(
+                    CONF_PING_INTERVAL, default=DEFAULT_PING_INTERVAL
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_PING_INTERVAL,
+                        max=MAX_PING_INTERVAL,
+                        step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="s",
+                    )
+                ),
+                vol.Optional(
+                    CONF_PING_METHOD, default=DEFAULT_PING_METHOD
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="auto", label="Automatique (Recommandé)"),
+                            selector.SelectOptionDict(value="z2m_get", label="Zigbee2MQTT (/get)"),
+                            selector.SelectOptionDict(value="zha_ping", label="ZHA Ping"),
+                            selector.SelectOptionDict(value="ha_update", label="Home Assistant Entity Update"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_AUTO_OTA_TRIGGER, default=DEFAULT_AUTO_OTA_TRIGGER
                 ): selector.BooleanSelector(),
             }
         )
@@ -345,6 +451,28 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                                 CONF_OPTIMISTIC: user_input.get(
                                     CONF_OPTIMISTIC, DEFAULT_OPTIMISTIC
                                 ),
+                                CONF_OTA_DURATION: normalize_ota_duration(
+                                    user_input.get(
+                                        CONF_OTA_DURATION,
+                                        r.get(CONF_OTA_DURATION, DEFAULT_OTA_DURATION),
+                                    )
+                                ),
+                                CONF_PING_INTERVAL: normalize_ping_interval(
+                                    user_input.get(
+                                        CONF_PING_INTERVAL,
+                                        r.get(CONF_PING_INTERVAL, DEFAULT_PING_INTERVAL),
+                                    )
+                                ),
+                                CONF_PING_METHOD: user_input.get(
+                                    CONF_PING_METHOD,
+                                    r.get(CONF_PING_METHOD, DEFAULT_PING_METHOD),
+                                ),
+                                CONF_AUTO_OTA_TRIGGER: bool(
+                                    user_input.get(
+                                        CONF_AUTO_OTA_TRIGGER,
+                                        r.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER),
+                                    )
+                                ),
                             }
                         )
                     else:
@@ -382,6 +510,48 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_OPTIMISTIC,
                     default=current_rule.get(CONF_OPTIMISTIC, DEFAULT_OPTIMISTIC),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_OTA_DURATION,
+                    default=current_rule.get(CONF_OTA_DURATION, DEFAULT_OTA_DURATION),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_OTA_DURATION,
+                        max=MAX_OTA_DURATION,
+                        step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="min",
+                    )
+                ),
+                vol.Optional(
+                    CONF_PING_INTERVAL,
+                    default=current_rule.get(CONF_PING_INTERVAL, DEFAULT_PING_INTERVAL),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_PING_INTERVAL,
+                        max=MAX_PING_INTERVAL,
+                        step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="s",
+                    )
+                ),
+                vol.Optional(
+                    CONF_PING_METHOD,
+                    default=current_rule.get(CONF_PING_METHOD, DEFAULT_PING_METHOD),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="auto", label="Automatique (Recommandé)"),
+                            selector.SelectOptionDict(value="z2m_get", label="Zigbee2MQTT (/get)"),
+                            selector.SelectOptionDict(value="zha_ping", label="ZHA Ping"),
+                            selector.SelectOptionDict(value="ha_update", label="Home Assistant Entity Update"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_AUTO_OTA_TRIGGER,
+                    default=current_rule.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER),
                 ): selector.BooleanSelector(),
             }
         )

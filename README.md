@@ -1,64 +1,39 @@
 # DomoLink KeepActive
 
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/default)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-KeepActive)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-KeepActive)
 
-**DomoLink KeepActive** est une intégration personnalisée pour Home Assistant conçue pour fiabiliser et stabiliser le comportement des entités domotiques (particulièrement **Zigbee** : **Zigbee2MQTT**, **ZHA**, **deCONZ / Dresden Elektronik**, etc.).
-
-Elle crée une entité miroir (Proxy Sentinelle) qui :
-1. **Maintient l'état actif** pendant une durée définie (*Hold Duration*) après que l'appareil physique a cessé d'émettre (ex: détecteur de présence/mouvement, contacteur de porte).
-2. **Filtre les coupures transitoires** (*Grace Period*) : Empêche l'entité de clignoter en `unavailable` ou `unknown` pendant les mises à jour OTA Zigbee, les sauts de maillage (*mesh rediscovery*) ou les latences de réseau.
-3. **Fournit un retour d'état optimiste immédiat** pour les actionneurs (switchs, prises, relais) pour une interface réactive sans effet rebond en attendant l'accusé de réception radio.
+**DomoLink KeepActive** est une intégration pour Home Assistant conçue pour fiabiliser et stabiliser le comportement des entités domotiques (particulièrement **Zigbee** : **Zigbee2MQTT**, **ZHA**, **deCONZ**, etc.) et **maintenir éveillés les capteurs sur batterie pendant leurs mises à jour de firmware (OTA)**.
 
 ---
 
-## 🎯 Compatibilité Universelle
+## ⚡ Nouveautés v1.2.0 : Moteur OTA Keep-Awake & Panneau Latéral
 
-Grâce à son architecture opérant directement sur le bus d'états de Home Assistant (`States Event Bus`) :
-* **Zigbee2MQTT (Z2M)** : 100% compatible
-* **ZHA (Zigbee Home Automation)** : 100% compatible
-* **deCONZ / Phoscon (Dresden Elektronik)** : 100% compatible
-* **Tout autre protocole (Z-Wave, Wi-Fi, ESPHome, BLE, MQTT)** : 100% compatible
+Les capteurs Zigbee sur batterie retournent en veille profonde (*deep sleep*) après quelques secondes, ce qui fait régulièrement échouer les mises à jour de firmware OTA qui nécessitent entre 10 et 90 minutes.
+
+**DomoLink KeepActive v1.2.0 apporte la solution complète :**
+* 📱 **Panneau latéral dédié dans Home Assistant** : Visualisez l'ensemble de vos appareils suivis, leur niveau de batterie, leur signal LQI et l'état de leur firmware.
+* 🔘 **Bouton ON / OFF OTA Keep-Awake** par appareil : active le maintien éveillé actif avec compte à rebours, jauge de progression et compteur de pings.
+* 🎚️ **Slider Durée Totale OTA (10 min à 90 min)** : réglage précis du temps de session avec arrêt automatique.
+* 🎚️ **Slider Fréquence de Ping (1 s à 60 s)** : sollicite le capteur avant qu'il ne s'endorme pour garantir la continuité du transfert radio.
+* 🚀 **Auto-déclenchement OTA** : détecte automatiquement les entités `update.*` et lance le maintien éveillé dès qu'une mise à jour démarre.
+* ⚙️ **Gestion complète (Ajouter / Modifier / Supprimer)** : modifiez vos appareils directement depuis le panneau latéral ou depuis **Paramètres > Appareils et services**.
 
 ---
 
-## 🚀 Installation
+## 🛡️ Fonctionnalités Historiques Sentinelle (Toujours Actives)
 
-### Méthode 1 : HACS (Recommandé)
-1. Ouvrez **HACS** dans Home Assistant.
-2. Cliquez sur les 3 points en haut à droite > **Dépôts personnalisés**.
-3. Ajoutez l'URL de ce dépôt avec la catégorie **Intégration**.
-4. Cliquez sur **Télécharger** puis redémarrez Home Assistant.
+Que le mode OTA soit actif ou non, KeepActive continue de protéger vos entités :
+1. **Maintien d'état actif prolongé** (*Hold Duration*) : empêche un détecteur de repasser prématurément à `off`.
+2. **Filtrage des micro-coupures** (*Grace Period*) : absorbe les états `unavailable` passagers lors des sauts de maillage radio ou redémarrages.
+3. **Retour d'état optimiste immédiat** : supprime les temps de latence et le vacillement visuel sur les interrupteurs et prises.
+4. **Regroupement d'appareil** : les entités sont proprement attachées à l'appareil de service **DomoLink KeepActive**.
 
-### Méthode 2 : Manuelle
-1. Copiez le dossier `custom_components/domolink_keep_active` dans votre répertoire `<config>/custom_components/`.
+---
+
+## 🚀 Installation & Utilisation
+
+1. Mettez à jour via **HACS** ou copiez le dossier `custom_components/domolink_keep_active` dans votre dossier `<config>/custom_components/`.
 2. Redémarrez Home Assistant.
-
----
-
-## ⚙️ Configuration
-
-1. Dans Home Assistant, allez dans **Paramètres** > **Appareils et services** > **Ajouter une intégration**.
-2. Recherchez **DomoLink KeepActive**.
-3. Renseignez les paramètres :
-   * **Entité source** : Choisissez votre capteur ou actionneur (`binary_sensor.*`, `sensor.*`, `switch.*`).
-   * **Durée de maintien actif (s)** : Nombre de secondes pendant lesquelles l'état reste `ON` après détection (ex: 30s ou 60s).
-   * **Période de grâce indisponibilité (s)** : Délai d'attente avant d'accepter l'état `unavailable` (ex: 60s).
-   * **Mode optimiste** : Activé par défaut pour les switchs.
-4. Une nouvelle entité protégée est créée instantanément.
-5. Dans **Paramètres** > **Appareils et services** > **DomoLink KeepActive**, cliquez sur **Configurer** pour :
-   * 🔍 **Visualiser la configuration** : voir le récapitulatif complet de toutes vos entités protégées, leurs temporisations et leur type.
-   * ➕ **Ajouter une entité KeepActive** : protéger une nouvelle entité directement depuis le menu.
-   * ✏️ **Modifier une entité existante** : ajuster l'entité source, le nom personnalisé ou les délais de maintien et de grâce.
-   * 🗑️ **Supprimer une entité** : retirer proprement une entité avec nettoyage automatique du registre Home Assistant.
-6. Toutes vos entités KeepActive sont automatiquement regroupées sous l'appareil **DomoLink KeepActive** dans Home Assistant.
-
----
-
-## 📊 Exemple d'Usage
-
-| Problème rencontré | Solution KeepActive |
-| :--- | :--- |
-| Un détecteur de présence repasse à `off` au bout de 5s alors qu'on est encore dans la pièce. | `hold_duration: 120` (reste `on` pendant 2 minutes après la dernière détection). |
-| Une sonde de température Zigbee passe en `unavailable` pendant 15s lors des sauts de routeurs. | `grace_period: 60` (l'état reste stable et disponible). |
-| Un interrupteur Zigbee met 2 secondes à confirmer son allumage, faisant vaciller le bouton dans Lovelace. | `optimistic: true` (l'UI prend l'état immédiatement sans vacillement). |
+3. Ouvrez le panneau **DomoLink KeepActive** dans la barre latérale gauche.
+4. Activez le bouton **« Maintien éveillé (OTA) »** sur le capteur que vous souhaitez mettre à jour, ou lancez la mise à jour directement depuis le bandeau de l'appareil !

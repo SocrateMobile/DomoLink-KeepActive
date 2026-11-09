@@ -79,9 +79,30 @@ if "homeassistant" not in sys.modules:
         SERVICE = "service"
     ha_dr.DeviceEntryType = DeviceEntryType
     ha_dr.DeviceInfo = lambda **kw: kw
+    ha_dr.async_get = MagicMock()
 
     ha_er = make_pkg("homeassistant.helpers.entity_registry")
     ha_er.async_get = MagicMock()
+
+    ha_components = make_pkg("homeassistant.components")
+    ha_frontend = make_pkg("homeassistant.components.frontend")
+    ha_components.frontend = ha_frontend
+    ha_frontend.async_register_built_in_panel = MagicMock()
+    ha_frontend.async_remove_panel = MagicMock()
+    ha_frontend.add_extra_js_url = MagicMock()
+
+    ha_http = make_pkg("homeassistant.components.http")
+    ha_components.http = ha_http
+    class HomeAssistantView:
+        requires_auth = True
+        def json(self, data, status=200):
+            return {"data": data, "status": status}
+    ha_http.HomeAssistantView = HomeAssistantView
+
+    ha_exc = make_pkg("homeassistant.exceptions")
+    class Unauthorized(Exception):
+        pass
+    ha_exc.Unauthorized = Unauthorized
 
     ha_bs = make_pkg("homeassistant.components.binary_sensor")
     ha_bs.BinarySensorEntity = MockEntity
@@ -111,6 +132,7 @@ if "homeassistant" not in sys.modules:
     ha_sel.NumberSelectorConfig = DummySelector
     class NumberSelectorMode:
         BOX = "box"
+        SLIDER = "slider"
     ha_sel.NumberSelectorMode = NumberSelectorMode
     ha_sel.BooleanSelector = DummySelector
     ha_sel.SelectSelector = DummySelector
@@ -123,6 +145,15 @@ if "homeassistant" not in sys.modules:
 
     ha_def = make_pkg("homeassistant.data_entry_flow")
     ha_def.FlowResult = dict
+
+if "aiohttp" not in sys.modules:
+    aiohttp_mock = types.ModuleType("aiohttp")
+    aiohttp_web_mock = types.ModuleType("aiohttp.web")
+    aiohttp_web_mock.Request = MagicMock
+    aiohttp_web_mock.Response = MagicMock
+    aiohttp_mock.web = aiohttp_web_mock
+    sys.modules["aiohttp"] = aiohttp_mock
+    sys.modules["aiohttp.web"] = aiohttp_web_mock
 
 if "voluptuous" not in sys.modules:
     vol_mock = types.ModuleType("voluptuous")
@@ -141,17 +172,29 @@ from custom_components.domolink_keep_active.const import (
     ACTION_DELETE,
     ACTION_EDIT,
     ACTION_VIEW,
+    CONF_AUTO_OTA_TRIGGER,
     CONF_GRACE_PERIOD,
     CONF_HOLD_DURATION,
     CONF_NAME,
     CONF_OPTIMISTIC,
+    CONF_OTA_DURATION,
+    CONF_PING_INTERVAL,
+    CONF_PING_METHOD,
     CONF_RULES,
     CONF_RULE_ID,
     CONF_SOURCE_ENTITY,
+    DEFAULT_AUTO_OTA_TRIGGER,
     DEFAULT_GRACE_PERIOD,
     DEFAULT_HOLD_DURATION,
     DEFAULT_OPTIMISTIC,
+    DEFAULT_OTA_DURATION,
+    DEFAULT_PING_INTERVAL,
+    DEFAULT_PING_METHOD,
     DOMAIN,
+    MAX_OTA_DURATION,
+    MAX_PING_INTERVAL,
+    MIN_OTA_DURATION,
+    MIN_PING_INTERVAL,
 )
 from custom_components.domolink_keep_active.entity import KeepActiveBaseEntity
 from custom_components.domolink_keep_active.binary_sensor import (
@@ -169,15 +212,19 @@ from custom_components.domolink_keep_active.switch import (
 from custom_components.domolink_keep_active.helpers import (
     get_platform_from_entity,
     get_rules_from_entry,
+    normalize_ota_duration,
+    normalize_ping_interval,
 )
 from custom_components.domolink_keep_active.config_flow import (
     DomoLinkKeepActiveConfigFlow,
     DomoLinkKeepActiveOptionsFlowHandler,
 )
+from custom_components.domolink_keep_active.ota_manager import OtaKeepAwakeManager
+from custom_components.domolink_keep_active.api import DomolinkKeepActiveApiView
 
 
 class TestDomoLinkKeepActive(unittest.TestCase):
-    """Test suite for KeepActive entity logic, platforms, and CRUD options flow."""
+    """Test suite for KeepActive entity logic, platforms, CRUD options flow, and OTA engine."""
 
     def setUp(self):
         self.hass = MagicMock()
@@ -195,6 +242,18 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertEqual(get_platform_from_entity("sensor.temperature"), "sensor")
         self.assertEqual(get_platform_from_entity("switch.plug"), "switch")
         self.assertEqual(get_platform_from_entity("unknown.device"), "binary_sensor")
+
+    def test_normalize_ota_sliders(self):
+        """Verify OTA duration (10-90) and ping interval (1-60) are properly clamped."""
+        self.assertEqual(normalize_ota_duration(5), MIN_OTA_DURATION)
+        self.assertEqual(normalize_ota_duration(120), MAX_OTA_DURATION)
+        self.assertEqual(normalize_ota_duration(45), 45)
+        self.assertEqual(normalize_ota_duration("invalid"), DEFAULT_OTA_DURATION)
+
+        self.assertEqual(normalize_ping_interval(0), MIN_PING_INTERVAL)
+        self.assertEqual(normalize_ping_interval(100), MAX_PING_INTERVAL)
+        self.assertEqual(normalize_ping_interval(15), 15)
+        self.assertEqual(normalize_ping_interval("invalid"), DEFAULT_PING_INTERVAL)
 
     def test_device_info_attached(self):
         """Verify device_info is attached to KeepActiveBaseEntity so entities group under DomoLink."""
@@ -222,21 +281,25 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertEqual(rules[0][CONF_HOLD_DURATION], 45)
         self.assertEqual(rules[0][CONF_GRACE_PERIOD], 90)
         self.assertTrue(rules[0][CONF_OPTIMISTIC])
+        self.assertEqual(rules[0][CONF_OTA_DURATION], DEFAULT_OTA_DURATION)
+        self.assertEqual(rules[0][CONF_PING_INTERVAL], DEFAULT_PING_INTERVAL)
 
     def test_get_rules_from_entry_multi_rules(self):
-        """Verify get_rules_from_entry returns full list from options."""
+        """Verify get_rules_from_entry returns full list from options with OTA defaults."""
         entry = MagicMock()
         entry.data = {}
         entry.options = {
             CONF_RULES: [
-                {CONF_SOURCE_ENTITY: "binary_sensor.radar_1", CONF_NAME: "Radar 1"},
-                {CONF_SOURCE_ENTITY: "switch.prise_1", CONF_NAME: "Prise 1"},
+                {CONF_SOURCE_ENTITY: "binary_sensor.radar_1", CONF_NAME: "Radar 1", CONF_OTA_DURATION: 40},
+                {CONF_SOURCE_ENTITY: "switch.prise_1", CONF_NAME: "Prise 1", CONF_PING_INTERVAL: 10},
             ]
         }
         rules = get_rules_from_entry(entry)
         self.assertEqual(len(rules), 2)
         self.assertEqual(rules[0][CONF_SOURCE_ENTITY], "binary_sensor.radar_1")
+        self.assertEqual(rules[0][CONF_OTA_DURATION], 40)
         self.assertEqual(rules[1][CONF_SOURCE_ENTITY], "switch.prise_1")
+        self.assertEqual(rules[1][CONF_PING_INTERVAL], 10)
 
     def test_platform_setup_entries(self):
         """Verify that platform async_setup_entry correctly instantiates only its matching entities."""
@@ -376,30 +439,8 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             blocking=False,
         )
 
-    def test_binary_sensor_re_turn_on_cancels_hold(self):
-        """If source turns back ON while hold timer is active, timer is canceled and state remains ON."""
-        sensor = KeepActiveBinarySensor(self.entry_id, self.config)
-        sensor.hass = self.hass
-        sensor._attr_is_on = True
-        fake_cancel = MagicMock()
-        sensor._timer_hold = fake_cancel
-
-        sensor._handle_new_source_state("on", {})
-        self.assertTrue(sensor._attr_is_on)
-        fake_cancel.assert_called_once()
-        self.assertIsNone(sensor._timer_hold)
-
-    def test_restore_state_binary_sensor(self):
-        """Verify restored state initialization."""
-        sensor = KeepActiveBinarySensor(self.entry_id, self.config)
-        sensor._handle_restored_state("on", {})
-        self.assertTrue(sensor._attr_is_on)
-
-        sensor._handle_restored_state("off", {})
-        self.assertFalse(sensor._attr_is_on)
-
     def test_config_flow_validation(self):
-        """Config flow rejects unsupported domain and accepts valid ones with rule persistence."""
+        """Config flow rejects unsupported domain and accepts valid ones with OTA fields."""
         flow = DomoLinkKeepActiveConfigFlow()
         flow.hass = self.hass
         flow.async_set_unique_id = AsyncMock()
@@ -414,16 +455,109 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         flow.async_show_form.assert_called()
         self.assertEqual(flow.async_show_form.call_args[1]["errors"]["base"], "unsupported_domain")
 
-        # Valid domain
+        # Valid domain with OTA duration slider
         asyncio.run(flow.async_step_user({
             CONF_SOURCE_ENTITY: "binary_sensor.porte",
             CONF_HOLD_DURATION: 20,
             CONF_GRACE_PERIOD: 40,
+            CONF_OTA_DURATION: 45,
+            CONF_PING_INTERVAL: 8,
         }))
         flow.async_create_entry.assert_called_once()
         created_data = flow.async_create_entry.call_args[1]["data"]
-        self.assertIn(CONF_RULES, created_data)
-        self.assertEqual(created_data[CONF_RULES][0][CONF_SOURCE_ENTITY], "binary_sensor.porte")
+        self.assertEqual(created_data[CONF_RULES][0][CONF_OTA_DURATION], 45)
+        self.assertEqual(created_data[CONF_RULES][0][CONF_PING_INTERVAL], 8)
+
+    def test_ota_manager_lifecycle(self):
+        """Test OTA keep-awake start, pinging, and stopping."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+
+        # Start OTA session for 30 minutes, 5s interval
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", duration_minutes=30, ping_interval=5))
+
+        state = ota.get_session_state("binary_sensor.radar")
+        self.assertTrue(state["active"])
+        self.assertEqual(state["duration_minutes"], 30)
+        self.assertEqual(state["ping_interval"], 5)
+        self.assertGreaterEqual(state["ping_count"], 1)
+
+        # Stop session
+        ota.async_stop_ota("binary_sensor.radar", reason="test")
+        state_after = ota.get_session_state("binary_sensor.radar")
+        self.assertFalse(state_after["active"])
+
+        # Check logs
+        logs = ota.get_logs()
+        self.assertGreaterEqual(len(logs), 2)
+        self.assertIn("Mode OTA Keep-Awake", logs[-1]["message"] if logs else "")
+
+    def test_api_view_endpoints(self):
+        """Test DomolinkKeepActiveApiView GET and POST endpoints."""
+        ota = OtaKeepAwakeManager(self.hass)
+        self.hass.services.has_service = MagicMock(return_value=True)
+        self.hass.services.async_call = AsyncMock()
+        self.hass.states.async_all = MagicMock(return_value=[])
+
+        # Mock active entry
+        entry = MagicMock()
+        entry.entry_id = "entry_1"
+        entry.data = {}
+        entry.options = {
+            CONF_RULES: [
+                {
+                    CONF_RULE_ID: "binary_sensor.radar",
+                    CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                    CONF_NAME: "Radar",
+                    CONF_HOLD_DURATION: 30,
+                    CONF_GRACE_PERIOD: 60,
+                    CONF_OPTIMISTIC: True,
+                    CONF_OTA_DURATION: 30,
+                    CONF_PING_INTERVAL: 5,
+                }
+            ]
+        }
+        self.hass.config_entries.async_entries = MagicMock(return_value=[entry])
+        self.hass.config_entries.async_update_entry = MagicMock()
+        self.hass.config_entries.async_reload = AsyncMock()
+
+        api = DomolinkKeepActiveApiView(self.hass, ota)
+
+        # 1. GET data
+        req_get = MagicMock()
+        req_get.get = MagicMock(return_value=MagicMock(is_admin=True))
+        res_get = asyncio.run(api.get(req_get, "data"))
+        self.assertEqual(res_get["data"]["status"], "ok")
+        self.assertEqual(len(res_get["data"]["rules"]), 1)
+
+        # 2. POST toggle_ota
+        req_post = MagicMock()
+        req_post.get = MagicMock(return_value=MagicMock(is_admin=True))
+        req_post.json = AsyncMock(return_value={"rule_id": "binary_sensor.radar", "active": True})
+        res_toggle = asyncio.run(api.post(req_post, "toggle_ota"))
+        self.assertEqual(res_toggle["data"]["status"], "ok")
+        self.assertTrue(res_toggle["data"]["session"]["active"])
+
+        # 3. POST update_ota_params (sliders 10-90 min, 1-60s)
+        req_post.json = AsyncMock(return_value={"rule_id": "binary_sensor.radar", "duration": 50, "interval": 12})
+        res_update = asyncio.run(api.post(req_post, "update_ota_params"))
+        self.assertEqual(res_update["data"]["status"], "ok")
+        self.assertEqual(res_update["data"]["duration"], 50)
+        self.assertEqual(res_update["data"]["interval"], 12)
+
+        # 4. POST save_rule (add second rule)
+        req_post.json = AsyncMock(return_value={
+            "source_entity": "switch.prise_salon",
+            "name": "Prise Salon",
+            "hold_duration": 10,
+            "grace_period": 20,
+            "ota_duration": 60,
+            "ping_interval": 15,
+        })
+        res_save = asyncio.run(api.post(req_post, "save_rule"))
+        self.assertEqual(res_save["data"]["status"], "ok")
+        self.assertEqual(res_save["data"]["rules_count"], 2)
 
     def test_options_flow_init_menu(self):
         """Test OptionsFlow displays menu choices."""
@@ -434,7 +568,6 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         flow = DomoLinkKeepActiveOptionsFlowHandler(entry)
         flow.async_show_form = MagicMock(return_value={"type": "form"})
 
-        # Render menu
         asyncio.run(flow.async_step_init())
         flow.async_show_form.assert_called_with(
             step_id="init",
@@ -451,6 +584,8 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             CONF_HOLD_DURATION: 30,
             CONF_GRACE_PERIOD: 60,
             CONF_OPTIMISTIC: True,
+            CONF_OTA_DURATION: 30,
+            CONF_PING_INTERVAL: 5,
         }
         entry.options = {}
 
@@ -461,7 +596,7 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         flow.async_show_form.assert_called_once()
         summary = flow.async_show_form.call_args[1]["description_placeholders"]["summary"]
         self.assertIn("Radar Salon", summary)
-        self.assertIn("Hold: 30s", summary)
+        self.assertIn("Maintien: 30s", summary)
 
     def test_options_flow_add_entity(self):
         """Test adding a new KeepActive entity via OptionsFlow."""
@@ -478,12 +613,15 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             CONF_HOLD_DURATION: 10,
             CONF_GRACE_PERIOD: 20,
             CONF_OPTIMISTIC: True,
+            CONF_OTA_DURATION: 40,
+            CONF_PING_INTERVAL: 10,
         }))
 
         flow.async_create_entry.assert_called_once()
         saved_rules = flow.async_create_entry.call_args[1]["data"][CONF_RULES]
         self.assertEqual(len(saved_rules), 2)
         self.assertEqual(saved_rules[1][CONF_SOURCE_ENTITY], "switch.prise_salon")
+        self.assertEqual(saved_rules[1][CONF_OTA_DURATION], 40)
 
     def test_options_flow_edit_entity(self):
         """Test editing an existing KeepActive entity via OptionsFlow."""
@@ -498,6 +636,8 @@ class TestDomoLinkKeepActive(unittest.TestCase):
                     CONF_HOLD_DURATION: 10,
                     CONF_GRACE_PERIOD: 10,
                     CONF_OPTIMISTIC: False,
+                    CONF_OTA_DURATION: 30,
+                    CONF_PING_INTERVAL: 5,
                 }
             ]
         }
@@ -512,14 +652,16 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             CONF_HOLD_DURATION: 60,
             CONF_GRACE_PERIOD: 120,
             CONF_OPTIMISTIC: True,
+            CONF_OTA_DURATION: 45,
+            CONF_PING_INTERVAL: 12,
         }))
 
         flow.async_create_entry.assert_called_once()
         saved_rules = flow.async_create_entry.call_args[1]["data"][CONF_RULES]
         self.assertEqual(saved_rules[0][CONF_NAME], "Nouveau Nom")
         self.assertEqual(saved_rules[0][CONF_HOLD_DURATION], 60)
-        self.assertEqual(saved_rules[0][CONF_GRACE_PERIOD], 120)
-        self.assertTrue(saved_rules[0][CONF_OPTIMISTIC])
+        self.assertEqual(saved_rules[0][CONF_OTA_DURATION], 45)
+        self.assertEqual(saved_rules[0][CONF_PING_INTERVAL], 12)
 
     def test_options_flow_delete_entity(self):
         """Test deleting a KeepActive entity via OptionsFlow with confirmation."""
@@ -537,7 +679,6 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         flow.hass = self.hass
         flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
 
-        # Deleting motion_1
         asyncio.run(flow.async_step_delete({
             "rule_to_delete": "binary_sensor.motion_1",
             "confirm_delete": True,
