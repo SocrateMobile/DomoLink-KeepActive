@@ -228,6 +228,11 @@ class TestDomoLinkKeepActive(unittest.TestCase):
 
     def setUp(self):
         self.hass = MagicMock()
+        def _mock_async_create_task(coro):
+            if asyncio.iscoroutine(coro):
+                coro.close()
+            return MagicMock()
+        self.hass.async_create_task = MagicMock(side_effect=_mock_async_create_task)
         self.entry_id = "test_entry_123"
         self.config = {
             CONF_SOURCE_ENTITY: "binary_sensor.mouvement_zigbee",
@@ -915,6 +920,122 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         saved_rules = flow.async_create_entry.call_args[1]["data"][CONF_RULES]
         self.assertEqual(len(saved_rules), 1)
         self.assertEqual(saved_rules[0][CONF_RULE_ID], "binary_sensor.motion_2")
+
+    def test_ota_manager_non_blocking_ping(self):
+        """Test non-blocking instant ping counting and dispatch."""
+        ota = OtaKeepAwakeManager(self.hass)
+        ota.set_rules_provider(lambda: [
+            {CONF_RULE_ID: "binary_sensor.radar", CONF_SOURCE_ENTITY: "binary_sensor.radar"}
+        ])
+        asyncio.run(ota.async_start_ota("binary_sensor.radar"))
+        session = ota.get_session_state("binary_sensor.radar")
+        initial_pings = session["ping_count"]
+
+        # Call async_send_ping
+        res = asyncio.run(ota.async_send_ping("binary_sensor.radar"))
+        self.assertTrue(res)
+
+        updated_session = ota.get_session_state("binary_sensor.radar")
+        self.assertEqual(updated_session["ping_count"], initial_pings + 1)
+        self.assertIsNotNone(updated_session["last_ping_time_str"])
+        self.hass.async_create_task.assert_called()
+
+    def test_ota_manager_burst_and_clear_logs(self):
+        """Test burst mode initiation and log clearing."""
+        ota = OtaKeepAwakeManager(self.hass)
+        ota.set_rules_provider(lambda: [
+            {CONF_RULE_ID: "binary_sensor.radar", CONF_SOURCE_ENTITY: "binary_sensor.radar"}
+        ])
+        asyncio.run(ota.async_start_ota("binary_sensor.radar"))
+
+        # Launch burst
+        asyncio.run(ota.async_start_burst("binary_sensor.radar", duration_seconds=5))
+        session = ota.get_session_state("binary_sensor.radar")
+        self.assertTrue(session["is_bursting"])
+
+        # Test clear logs
+        logs = ota.get_logs()
+        self.assertGreater(len(logs), 0)
+        ota.clear_logs()
+        cleared_logs = ota.get_logs()
+        self.assertEqual(len(cleared_logs), 1)
+        self.assertIn("🧹 Journal réinitialisé", cleared_logs[0]["message"])
+
+    def test_ota_manager_auto_start_does_not_overwrite_active(self):
+        """Test that auto-start event does not reset an already active session."""
+        ota = OtaKeepAwakeManager(self.hass)
+        ota.set_rules_provider(lambda: [
+            {
+                CONF_RULE_ID: "binary_sensor.radar",
+                CONF_SOURCE_ENTITY: "binary_sensor.radar",
+                CONF_AUTO_OTA_TRIGGER: True,
+            }
+        ])
+        ota.get_device_enrichment = MagicMock(return_value={
+            "update_entity_id": "update.radar",
+            "in_progress": True,
+        })
+
+        # Start active session manually with 90 min and 5 pings
+        asyncio.run(ota.async_start_ota("binary_sensor.radar", duration_minutes=90))
+        for _ in range(5):
+            asyncio.run(ota.async_send_ping("binary_sensor.radar"))
+
+        session = ota.get_session_state("binary_sensor.radar")
+        pings_before = session["ping_count"]
+        self.assertEqual(session["duration_minutes"], 90)
+
+        captured_handler = None
+        def mock_track(hass, entities, handler):
+            nonlocal captured_handler
+            captured_handler = handler
+            return lambda: None
+
+        with patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track):
+            ota.async_setup_auto_ota_listener()
+
+        # Fire update in_progress start
+        event = MagicMock()
+        event.data = {
+            "entity_id": "update.radar",
+            "old_state": MagicMock(attributes={"in_progress": False}),
+            "new_state": MagicMock(attributes={"in_progress": True}),
+        }
+        captured_handler(event)
+
+        session_after = ota.get_session_state("binary_sensor.radar")
+        # Session duration and pings should NOT have been wiped/reset to default!
+        self.assertEqual(session_after["duration_minutes"], 90)
+        self.assertEqual(session_after["ping_count"], pings_before)
+
+    def test_api_burst_and_clear_logs(self):
+        """Test API endpoints for burst_ota and clear_logs."""
+        ota = OtaKeepAwakeManager(self.hass)
+        ota.set_rules_provider(lambda: [
+            {CONF_RULE_ID: "binary_sensor.radar", CONF_SOURCE_ENTITY: "binary_sensor.radar"}
+        ])
+        asyncio.run(ota.async_start_ota("binary_sensor.radar"))
+
+        api = DomolinkKeepActiveApiView(self.hass, ota)
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {CONF_RULES: [{CONF_RULE_ID: "binary_sensor.radar", CONF_SOURCE_ENTITY: "binary_sensor.radar"}]}
+        api._get_active_entry = MagicMock(return_value=mock_entry)
+
+        # 1. Burst action
+        req_burst = MagicMock()
+        req_burst.get = MagicMock(return_value=MagicMock())  # hass_user
+        req_burst.json = AsyncMock(return_value={"rule_id": "binary_sensor.radar", "seconds": 10})
+        res_burst = asyncio.run(api.post(req_burst, "burst_ota"))
+        self.assertEqual(res_burst["data"]["status"], "ok")
+        self.assertTrue(res_burst["data"]["session"]["is_bursting"])
+
+        # 2. Clear logs action
+        req_clear = MagicMock()
+        req_clear.get = MagicMock(return_value=MagicMock())
+        req_clear.json = AsyncMock(return_value={})
+        res_clear = asyncio.run(api.post(req_clear, "clear_logs"))
+        self.assertEqual(res_clear["data"]["status"], "ok")
 
 
 if __name__ == "__main__":

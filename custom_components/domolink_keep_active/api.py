@@ -212,6 +212,20 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
             session = self.ota_manager.async_extend_session(rule_id, minutes)
             return self.json({"status": "ok", "session": session})
 
+        # 3c. BURST OTA SESSION (RAPID PINGS 15s)
+        if action == "burst_ota":
+            rule_id = body.get("rule_id")
+            if not rule_id:
+                return self.json({"error": "rule_id manquant"}, status=400)
+            seconds = int(body.get("seconds", 15))
+            session = await self.ota_manager.async_start_burst(rule_id, duration_seconds=seconds)
+            return self.json({"status": "ok", "session": session})
+
+        # 3d. CLEAR LOGS
+        if action == "clear_logs":
+            self.ota_manager.clear_logs()
+            return self.json({"status": "ok", "logs": self.ota_manager.get_logs()})
+
         # 4. SAVE RULE (ADD OR MODIFY)
         if action == "save_rule":
             source_entity = body.get("source_entity")
@@ -310,17 +324,23 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
             if not rule_id or not update_entity_id:
                 return self.json({"error": "rule_id et update_entity_id requis"}, status=400)
 
-            # Start keep-awake
+            # Start keep-awake & launch initial burst
             session = await self.ota_manager.async_start_ota(rule_id)
+            await self.ota_manager.async_start_burst(rule_id, duration_seconds=15)
 
-            # Trigger update.install
-            if self.hass.services.has_service("update", "install"):
-                await self.hass.services.async_call(
-                    "update",
-                    "install",
-                    {"entity_id": update_entity_id},
-                    blocking=False,
-                )
+            # Trigger update.install safely only if not already in progress
+            update_state = self.hass.states.get(update_entity_id)
+            is_in_progress = bool(update_state and update_state.attributes.get("in_progress"))
+            if not is_in_progress and self.hass.services.has_service("update", "install"):
+                try:
+                    await self.hass.services.async_call(
+                        "update",
+                        "install",
+                        {"entity_id": update_entity_id},
+                        blocking=False,
+                    )
+                except Exception as err:
+                    _LOGGER.warning("Impossible de lancer update.install sur %s: %s", update_entity_id, err)
 
             return self.json({"status": "ok", "session": session, "update_entity_id": update_entity_id})
 

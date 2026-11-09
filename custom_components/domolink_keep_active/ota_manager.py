@@ -5,6 +5,7 @@ by sending periodic read/get/poll requests so the device does not drop into deep
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any, Callable
@@ -88,6 +89,11 @@ class OtaKeepAwakeManager:
         """Return the recent activity log."""
         return list(self._logs)
 
+    def clear_logs(self) -> None:
+        """Clear all entries from the activity log."""
+        self._logs.clear()
+        self._add_log("system", "🧹 Journal réinitialisé.", "info")
+
     def get_session_state(self, rule_id: str) -> dict[str, Any]:
         """Return the current session state for a rule."""
         session = self._sessions.get(rule_id)
@@ -100,8 +106,10 @@ class OtaKeepAwakeManager:
                 "ping_interval": DEFAULT_PING_INTERVAL,
                 "ping_count": 0,
                 "last_ping_at": None,
+                "last_ping_time_str": None,
                 "last_ping_status": None,
                 "method_used": DEFAULT_PING_METHOD,
+                "is_bursting": False,
             }
 
         now = time.time()
@@ -109,6 +117,11 @@ class OtaKeepAwakeManager:
         start_time = session.get("start_time", now)
         remaining = max(0, int(end_time - now))
         elapsed = max(0, int(now - start_time))
+        last_ping_time_str = (
+            time.strftime("%H:%M:%S", time.localtime(session["last_ping_at"]))
+            if session.get("last_ping_at")
+            else None
+        )
 
         return {
             "active": True,
@@ -118,9 +131,11 @@ class OtaKeepAwakeManager:
             "ping_interval": session.get("ping_interval", DEFAULT_PING_INTERVAL),
             "ping_count": session.get("ping_count", 0),
             "last_ping_at": session.get("last_ping_at"),
+            "last_ping_time_str": last_ping_time_str,
             "last_ping_status": session.get("last_ping_status", "success"),
             "method_used": session.get("method_used", DEFAULT_PING_METHOD),
             "auto_triggered": session.get("auto_triggered", False),
+            "is_bursting": bool(session.get("is_bursting", False)),
         }
 
     def get_all_sessions(self) -> dict[str, dict[str, Any]]:
@@ -284,8 +299,8 @@ class OtaKeepAwakeManager:
                 pass
             session["timer_cancel"] = None
 
-    async def async_send_ping(self, rule_id: str) -> bool:
-        """Send a single Keep-Awake wakeup request to the device."""
+    async def async_send_ping(self, rule_id: str, is_burst: bool = False) -> bool:
+        """Send a single Keep-Awake wakeup request to the device in a non-blocking way."""
         session = self._sessions.get(rule_id)
         source_entity = (
             session.get("source_entity")
@@ -294,81 +309,145 @@ class OtaKeepAwakeManager:
         )
         method = session.get("method_used", DEFAULT_PING_METHOD) if session else DEFAULT_PING_METHOD
 
+        # 1. Update session state and log immediately (instant UI feedback)
+        if session:
+            session["ping_count"] = session.get("ping_count", 0) + 1
+            session["last_ping_at"] = time.time()
+            session["last_ping_status"] = "pending"
+
+        ping_num = session.get("ping_count", 1) if session else 1
+        prefix = "🔥 Salve" if is_burst else "⚡ Impulsion"
+        self._add_log(
+            rule_id,
+            f"{prefix} #{ping_num} envoyée à {source_entity} ({method})",
+            "debug",
+        )
+
+        # 2. Dispatch actual radio ping in background task so UI / API call is instantaneous
+        self.hass.async_create_task(
+            self._async_dispatch_radio_ping(rule_id, source_entity, method)
+        )
+        return True
+
+    async def _async_dispatch_radio_ping(
+        self, rule_id: str, source_entity: str, method: str
+    ) -> bool:
+        """Dispatch radio packet to keep Zigbee/device awake with a strict timeout."""
+        session = self._sessions.get(rule_id)
         success = False
+
         try:
-            # 1. ZHA Zigbee cluster command / attribute read (for ZHA networks)
+            # 1. ZHA Zigbee cluster command (Identify Query / Read)
             if method in ("zha_ping", "auto"):
                 zha_ieee = self._resolve_zha_ieee(source_entity)
                 if zha_ieee and self.hass.services.has_service("zha", "issue_zigbee_cluster_command"):
                     try:
-                        await self.hass.services.async_call(
-                            "zha",
-                            "issue_zigbee_cluster_command",
-                            {
-                                "ieee": zha_ieee,
-                                "endpoint_id": 1,
-                                "cluster_id": 0,
-                                "cluster_type": "in",
-                                "command": 0,
-                                "command_type": "server",
-                                "params": {},
-                            },
-                            blocking=True,
-                        )
+                        # Cluster 3 (Identify) Command 1 is Identify Query (safe query)
+                        # We use a short timeout of 3.5s so HA never hangs or warns
+                        async with asyncio.timeout(3.5):
+                            await self.hass.services.async_call(
+                                "zha",
+                                "issue_zigbee_cluster_command",
+                                {
+                                    "ieee": zha_ieee,
+                                    "endpoint_id": 1,
+                                    "cluster_id": 3,
+                                    "cluster_type": "in",
+                                    "command": 1,
+                                    "command_type": "server",
+                                    "params": {},
+                                },
+                                blocking=True,
+                            )
                         success = True
                     except Exception as zha_err:
                         err_str = str(zha_err)
-                        # An UNSUP_CLUSTER_COMMAND or status 129 response proves the device is awake
-                        # and acknowledged the Zigbee radio packet!
-                        if "UNSUP_CLUSTER_COMMAND" in err_str or "129" in err_str:
+                        # An UNSUP_CLUSTER_COMMAND or status 129 response proves the device is awake!
+                        if "UNSUP_CLUSTER_COMMAND" in err_str or "129" in err_str or "unsupported" in err_str.lower():
                             _LOGGER.debug("ZHA ping acquitté par l'appareil: %s", zha_err)
                             success = True
                         else:
-                            _LOGGER.debug("ZHA ping fallback: %s", zha_err)
+                            _LOGGER.debug("ZHA ping: %s", zha_err)
 
-            # 2. Zigbee2MQTT MQTT get ping (if method is z2m_get or auto with MQTT)
-            if method in ("z2m_get", "auto") and self.hass.services.has_service("mqtt", "publish"):
+            # 2. Zigbee2MQTT MQTT get ping
+            if not success and method in ("z2m_get", "auto") and self.hass.services.has_service("mqtt", "publish"):
                 z2m_name = self._resolve_z2m_device_name(source_entity)
                 if z2m_name:
-                    await self.hass.services.async_call(
-                        "mqtt",
-                        "publish",
-                        {
-                            "topic": f"zigbee2mqtt/{z2m_name}/get",
-                            "payload": '{"state": ""}',
-                        },
-                        blocking=False,
-                    )
-                    success = True
+                    try:
+                        await self.hass.services.async_call(
+                            "mqtt",
+                            "publish",
+                            {
+                                "topic": f"zigbee2mqtt/{z2m_name}/get",
+                                "payload": '{"state": ""}',
+                            },
+                            blocking=False,
+                        )
+                        success = True
+                    except Exception as mqtt_err:
+                        _LOGGER.debug("MQTT ping error: %s", mqtt_err)
 
-            # 3. Home Assistant update_entity ping (universal fallback / poll)
-            if self.hass.services.has_service("homeassistant", "update_entity"):
-                await self.hass.services.async_call(
-                    "homeassistant",
-                    "update_entity",
-                    {ATTR_ENTITY_ID: source_entity},
-                    blocking=False,
-                )
-                success = True
+            # 3. Universal HA update_entity ONLY if method is explicitly ha_update or not resolved via ZHA/Z2M
+            if (not success and method != "auto") or method == "ha_update":
+                if self.hass.services.has_service("homeassistant", "update_entity"):
+                    try:
+                        await self.hass.services.async_call(
+                            "homeassistant",
+                            "update_entity",
+                            {ATTR_ENTITY_ID: source_entity},
+                            blocking=False,
+                        )
+                        success = True
+                    except Exception as ha_err:
+                        _LOGGER.debug("HA update_entity error: %s", ha_err)
 
             if session:
-                session["ping_count"] = session.get("ping_count", 0) + 1
-                session["last_ping_at"] = time.time()
                 session["last_ping_status"] = "success" if success else "failed"
 
-            self._add_log(
-                rule_id,
-                f"⚡ Impulsion #{session.get('ping_count', 1) if session else 1} envoyée à {source_entity} ({method})",
-                "debug",
-            )
             return success
 
         except Exception as err:
-            _LOGGER.warning("Erreur lors du ping OTA sur %s: %s", source_entity, err)
+            _LOGGER.debug("Exception pendant le dispatch radio ping sur %s: %s", source_entity, err)
             if session:
                 session["last_ping_status"] = "failed"
-            self._add_log(rule_id, f"⚠️ Échec du ping vers {source_entity}: {err}", "warning")
             return False
+
+    async def async_start_burst(self, rule_id: str, duration_seconds: int = 15) -> dict[str, Any]:
+        """Fire a rapid burst of pings (1 ping/sec) for N seconds to wake up sleepy sensors."""
+        session = self._sessions.get(rule_id)
+        if not session or not session.get("active"):
+            session = await self.async_start_ota(rule_id)
+
+        if session.get("is_bursting"):
+            return self.get_session_state(rule_id)
+
+        session["is_bursting"] = True
+        self._add_log(
+            rule_id,
+            f"🔥 Lancement d'une salve de réveil rapide ({duration_seconds}s à 1 ping/s)... Appuyez sur le bouton du capteur !",
+            "warning",
+        )
+
+        async def _run_burst():
+            try:
+                for _ in range(duration_seconds):
+                    if not session.get("active"):
+                        break
+                    await self.async_send_ping(rule_id, is_burst=True)
+                    await asyncio.sleep(1.0)
+            except Exception as burst_err:
+                _LOGGER.debug("Erreur burst: %s", burst_err)
+            finally:
+                session["is_bursting"] = False
+                if session.get("active"):
+                    self._add_log(
+                        rule_id,
+                        f"✅ Salve terminée. Maintien régulier actif toutes les {session.get('ping_interval')}s.",
+                        "info",
+                    )
+
+        self.hass.async_create_task(_run_burst())
+        return self.get_session_state(rule_id)
 
     def _resolve_zha_ieee(self, entity_id: str) -> str | None:
         """Resolve ZHA IEEE address from Home Assistant registries."""
@@ -612,14 +691,23 @@ class OtaKeepAwakeManager:
                     # 3. Auto-start on update launch if enabled in rule
                     if rule.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER):
                         if new_in_progress and not old_in_progress:
-                            self._add_log(
-                                rule_id,
-                                f"🔔 Détection automatique de mise à jour firmware en cours sur {entity_id} !",
-                                "info",
-                            )
-                            self.hass.async_create_task(
-                                self.async_start_ota(rule_id, auto_triggered=True)
-                            )
+                            if not session.get("active"):
+                                self._add_log(
+                                    rule_id,
+                                    f"🔔 Détection automatique de mise à jour firmware en cours sur {entity_id} !",
+                                    "info",
+                                )
+                                async def _auto_start_and_burst(target_rule_id=rule_id):
+                                    await self.async_start_ota(target_rule_id, auto_triggered=True)
+                                    await self.async_start_burst(target_rule_id, duration_seconds=15)
+
+                                self.hass.async_create_task(_auto_start_and_burst())
+                            else:
+                                _LOGGER.debug(
+                                    "Mise à jour en cours sur %s mais session OTA déjà active pour %s",
+                                    entity_id,
+                                    rule_id,
+                                )
 
         self._update_listener = async_track_state_change_event(
             self.hass,

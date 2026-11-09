@@ -12,7 +12,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
     this._logs = [];
     this._availableEntities = [];
     this._searchQuery = "";
-    this._showLogs = false;
+    this._showLogs = true;
     this._modalOpen = false;
     this._editingRule = null;
     this._pollTimer = null;
@@ -574,6 +574,18 @@ class DomolinkKeepActivePanel extends HTMLElement {
           border-color: rgba(244, 67, 54, 0.35);
           color: #c62828;
         }
+        .icon-btn.btn-burst-ota {
+          border-color: rgba(230, 81, 0, 0.4);
+          color: #e65100;
+        }
+        .icon-btn.btn-burst-ota:hover {
+          background: rgba(230, 81, 0, 0.12);
+        }
+        .icon-btn.btn-burst-ota.bursting {
+          background: rgba(230, 81, 0, 0.25);
+          border-color: #e65100;
+          font-weight: 700;
+        }
 
         /* Tiroir des Logs en direct */
         .logs-section {
@@ -673,56 +685,6 @@ class DomolinkKeepActivePanel extends HTMLElement {
           gap: 10px;
           margin-top: 12px;
         }
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-          padding: 20px;
-        }
-        .modal-card {
-          background: #1e2630;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          border-radius: 14px;
-          max-width: 520px;
-          width: 100%;
-          max-height: 90vh;
-          overflow-y: auto;
-          padding: 24px;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .form-label {
-          font-size: 13px;
-          font-weight: 600;
-          color: #b0bec5;
-        }
-        .form-input, .form-select {
-          background: #141a20;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          color: #fff;
-          padding: 9px 12px;
-          border-radius: 6px;
-          font-size: 14px;
-          outline: none;
-        }
-        .form-checkbox-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 13px;
-        }
-        .modal-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-          margin-top: 12px;
-        }
       </style>
 
       <div class="header">
@@ -731,7 +693,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div>
             <h1 style="display:flex; align-items:center; gap:8px;">
               DomoLink KeepActive
-              <span class="badge-version">⚡ DÉFIBRILLATEUR OTA</span>
+              <span class="badge-version">v1.2.5 • ⚡ DÉFIBRILLATEUR OTA</span>
             </h1>
             <div style="font-size:11px; color:#80deea; letter-spacing:0.8px; font-weight:600;">ANTI DEEP-SLEEP • SENTINELLE ZIGBEE</div>
           </div>
@@ -758,28 +720,28 @@ class DomolinkKeepActivePanel extends HTMLElement {
         <div class="stat-card">
           <div class="stat-icon">🛡️</div>
           <div>
-            <div class="stat-val">${this._rules.length}</div>
+            <div class="stat-val" id="statProtected">${this._rules.length}</div>
             <div class="stat-label">Appareils protégés</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon">🚀</div>
           <div>
-            <div class="stat-val">${activeOtaCount}</div>
+            <div class="stat-val" id="statActiveSessions">${activeOtaCount}</div>
             <div class="stat-label">Sessions OTA actives</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon">⚡</div>
           <div>
-            <div class="stat-val">${totalPings}</div>
+            <div class="stat-val" id="statPingsSent">${totalPings}</div>
             <div class="stat-label">Pings de maintien envoyés</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon">📦</div>
           <div>
-            <div class="stat-val">${updatesAvailableCount}</div>
+            <div class="stat-val" id="statUpdatesAvailable">${updatesAvailableCount}</div>
             <div class="stat-label">Mises à jour firmware détectées</div>
           </div>
         </div>
@@ -803,8 +765,14 @@ class DomolinkKeepActivePanel extends HTMLElement {
           ? `
         <div class="logs-section">
           <div class="logs-header">
-            <h3 style="margin:0;">📜 Journal en direct des Pings & Sessions OTA</h3>
-            <button class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" id="btnClearLogsView">Masquer</button>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h3 style="margin:0;">📜 Journal en direct des Pings & Sessions OTA</h3>
+              <span style="font-size:11px; background:rgba(46, 125, 50, 0.15); color:#2e7d32; border:1px solid rgba(46, 125, 50, 0.35); border-radius:10px; padding:2px 8px; font-weight:700;">🟢 En direct</span>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" id="btnClearLogsData">🧹 Vider</button>
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" id="btnClearLogsView">Masquer</button>
+            </div>
           </div>
           <div class="logs-list">
             ${
@@ -927,11 +895,17 @@ class DomolinkKeepActivePanel extends HTMLElement {
               ? `
             <div class="ota-live-status">
               <div>
-                Temps restant : <span class="ota-timer-text timer-display" data-rule-id="${rId}">${this._formatTime(remaining)}</span>
+                <div>Temps restant : <span class="ota-timer-text timer-display" data-rule-id="${rId}">${this._formatTime(remaining)}</span></div>
+                <div style="font-size:11px; color:var(--secondary-text-color, #757575); margin-top:2px;">
+                  Dernier ping : <span class="last-ping-display" data-rule-id="${rId}">${session.last_ping_time_str || "Aucun"}</span>
+                </div>
               </div>
-              <div style="display:flex; gap:6px;">
+              <div style="display:flex; gap:6px; align-items:center;">
                 <button class="icon-btn btn-extend-ota" data-rule-id="${rId}" title="Prolonger la session de 15 minutes">
                   ➕ 15 min
+                </button>
+                <button class="icon-btn btn-burst-ota ${session.is_bursting ? "bursting" : ""}" data-rule-id="${rId}" title="Envoyer 1 ping/seconde pendant 15s pour réveiller le capteur en phase Preparing">
+                  ${session.is_bursting ? "🔥 Salve..." : "🔥 Salve 15s"}
                 </button>
                 <button class="icon-btn btn-ping-now" data-rule-id="${rId}" title="Envoyer un ping immédiat">
                   ⚡ Ping (${session.ping_count || 0})
@@ -1106,12 +1080,19 @@ class DomolinkKeepActivePanel extends HTMLElement {
 
   _updateOtaElements() {
     let needsFullRender = false;
+    let activeOtaCount = 0;
+    let totalPings = 0;
+    let updatesAvailableCount = 0;
 
     for (const rule of this._rules) {
       const rId = rule.rule_id || rule.source_entity;
       const remaining = this._localRemaining[rId] || 0;
       const session = rule.ota_session || {};
       const enrich = rule.device_enrichment || {};
+
+      if (session.active) activeOtaCount++;
+      totalPings += session.ping_count || 0;
+      if (enrich.update_available) updatesAvailableCount++;
 
       const card = this.shadowRoot.querySelector(`.card[data-rule-id="${rId}"]`);
       if (card) {
@@ -1127,9 +1108,24 @@ class DomolinkKeepActivePanel extends HTMLElement {
         timerEl.textContent = this._formatTime(remaining);
       }
 
+      const lastPingEl = this.shadowRoot.querySelector(`.last-ping-display[data-rule-id="${rId}"]`);
+      if (lastPingEl) {
+        lastPingEl.textContent = session.last_ping_time_str || "Aucun";
+      }
+
       const pingBtn = this.shadowRoot.querySelector(`.btn-ping-now[data-rule-id="${rId}"]`);
-      if (pingBtn) {
+      if (pingBtn && !pingBtn.dataset.clicking) {
         pingBtn.textContent = `⚡ Ping (${session.ping_count || 0})`;
+      }
+
+      const burstBtn = this.shadowRoot.querySelector(`.btn-burst-ota[data-rule-id="${rId}"]`);
+      if (burstBtn) {
+        burstBtn.textContent = session.is_bursting ? "🔥 Salve..." : "🔥 Salve 15s";
+        if (session.is_bursting) {
+          burstBtn.classList.add("bursting");
+        } else {
+          burstBtn.classList.remove("bursting");
+        }
       }
 
       // Update progress bar & percentage badge if in_progress
@@ -1147,6 +1143,35 @@ class DomolinkKeepActivePanel extends HTMLElement {
           progressFill.classList.add("indeterminate");
           progressFill.style.width = "40%";
         }
+      }
+    }
+
+    // Live update top stat counters
+    const statProt = this.shadowRoot.getElementById("statProtected");
+    if (statProt) statProt.textContent = this._rules.length;
+    const statAct = this.shadowRoot.getElementById("statActiveSessions");
+    if (statAct) statAct.textContent = activeOtaCount;
+    const statPings = this.shadowRoot.getElementById("statPingsSent");
+    if (statPings) statPings.textContent = totalPings;
+    const statUpd = this.shadowRoot.getElementById("statUpdatesAvailable");
+    if (statUpd) statUpd.textContent = updatesAvailableCount;
+
+    // Live update logs list
+    const logsListEl = this.shadowRoot.querySelector(".logs-list");
+    if (logsListEl) {
+      if (this._logs.length === 0) {
+        logsListEl.innerHTML = `<div style="color:#78909c;">Aucune activité récente.</div>`;
+      } else {
+        logsListEl.innerHTML = this._logs
+          .map(
+            (l) => `
+          <div class="log-item">
+            <span class="log-time">[${l.time_str}]</span>
+            <span class="log-msg ${l.level}">${l.message}</span>
+          </div>
+        `
+          )
+          .join("");
       }
     }
 
@@ -1180,6 +1205,12 @@ class DomolinkKeepActivePanel extends HTMLElement {
         this.render();
       };
     }
+    const btnClearLogsData = this.shadowRoot.getElementById("btnClearLogsData");
+    if (btnClearLogsData) {
+      btnClearLogsData.onclick = () => {
+        this._apiCall("clear_logs", {});
+      };
+    }
 
     // Bouton ajouter
     const btnAddDevice = this.shadowRoot.getElementById("btnAddDevice");
@@ -1201,11 +1232,29 @@ class DomolinkKeepActivePanel extends HTMLElement {
       };
     });
 
-    // Ping immédiat
+    // Ping immédiat avec retour visuel instantané
     this.shadowRoot.querySelectorAll(".btn-ping-now").forEach((btn) => {
       btn.onclick = () => {
         const rId = btn.dataset.ruleId;
+        btn.dataset.clicking = "true";
+        btn.textContent = "✅ Envoyé !";
+        btn.style.borderColor = "#2e7d32";
+        btn.style.color = "#2e7d32";
+        setTimeout(() => {
+          delete btn.dataset.clicking;
+          btn.style.borderColor = "";
+          btn.style.color = "";
+        }, 1200);
         this._apiCall("ping_now", { rule_id: rId });
+      };
+    });
+
+    // Salve rapide 15s (1 ping / sec)
+    this.shadowRoot.querySelectorAll(".btn-burst-ota").forEach((btn) => {
+      btn.onclick = () => {
+        const rId = btn.dataset.ruleId;
+        btn.textContent = "🔥 Salve...";
+        this._apiCall("burst_ota", { rule_id: rId, seconds: 15 });
       };
     });
 
