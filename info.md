@@ -34,6 +34,7 @@ Les capteurs Zigbee sur batterie (Sleepy End Devices) retournent en veille profo
 > 1. **Réappairer le capteur sans le supprimer** : Ne supprimez **pas** l'appareil de Home Assistant. Passez simplement votre coordinateur Zigbee (ZHA ou Zigbee2MQTT) en mode appairage, puis maintenez le bouton physique du capteur quelques secondes jusqu'au clignotement de la LED. Le capteur est réassocié instantanément en conservant son identifiant, son historique et toutes ses automatisations.
 > 2. **Lancer la mise à jour via DomoLink KeepActive** : Cliquez sur le bouton **« ⚡ Mettre à jour »** (ou activez le défibrillateur OTA).
 > 3. **Provoquer le premier réveil radio** : Dès que l'état passe sur *« Préparation »* (*Preparing*), cliquez sur **« 🔥 Salve 15s »** (ou **« ⚡ Ping »**) et **appuyez 1 fois brièvement sur le bouton physique du capteur** (ou passez la main devant s'il s'agit d'un radar/capteur de présence). 
+> 4. **Distance idéale avec la clé Zigbee** : Si l'appareil est facilement déplaçable, approchez-le idéalement entre **1 et 2 mètres** de votre coordinateur (clé Zigbee) ou d'un routeur puissant. *Astuce* : évitez d'être collé à moins de 30 cm (risque de saturation radio RF) ou à plus de 5 mètres avec des obstacles (les pertes de paquets ralentissent et risquent d'interrompre l'OTA).
 > 
 > Le capteur captera immédiatement le bloc d'en-tête OTA et la jauge de progression s'enclenchera jusqu'à 100% !
 

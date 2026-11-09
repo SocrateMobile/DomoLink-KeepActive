@@ -869,7 +869,11 @@ class DomolinkKeepActivePanel extends HTMLElement {
             }
           </div>
           <div class="zha-hint-box">
-            💡 <strong>Important pour démarrer l'OTA (ZHA)</strong> : Dès que la fenêtre affiche <em>« Preparing »</em>, appuyez <strong>1 fois brièvement sur le bouton du capteur</strong> (ou passez la main devant le radar) pour déclencher son réveil radio initial et engager le transfert du firmware !
+            💡 <strong>Conseils pour réussir l'OTA</strong> :
+            <div style="margin-top:4px; display:flex; flex-direction:column; gap:4px;">
+              <div>📏 <strong>Distance idéale</strong> : Si possible, rapprochez le capteur à <strong>1 à 2 mètres</strong> de la clé Zigbee (ni collé à moins de 30 cm pour éviter la saturation radio, ni trop loin pour éviter les pertes de paquets).</div>
+              <div>⚡ <strong>Réveil radio</strong> : Dès que l'état affiche <em>« Preparing »</em>, appuyez <strong>1 fois brièvement sur le bouton du capteur</strong> (ou passez la main devant le radar) pour lancer le transfert !</div>
+            </div>
           </div>
         `
             : ""
