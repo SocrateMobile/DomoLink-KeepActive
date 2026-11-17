@@ -17,7 +17,7 @@ def test_manifest_structure_and_version():
 
     assert manifest["domain"] == "domolink_keep_active"
     assert manifest["name"] == "DomoLink KeepActive"
-    assert manifest["version"] == "1.2.6"
+    assert manifest["version"] == "1.2.7"
     assert manifest["codeowners"] == ["@SocrateMobile"]
 
 
@@ -101,3 +101,15 @@ def test_no_direct_blocking_io_in_async_functions():
                 check_node(item)
 
     assert not violations, f"Blocking calls found: {violations}"
+
+
+def test_panel_js_defines_escape_html():
+    """Verify domolink-keep-active-panel.js defines _escapeHtml if it is called."""
+    panel_path = os.path.join(COMPONENT_DIR, "frontend", "domolink-keep-active-panel.js")
+    with open(panel_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    if "this._escapeHtml(" in code:
+        assert any(
+            line.strip().startswith("_escapeHtml(") for line in code.splitlines()
+        ), "_escapeHtml method must be defined on DomolinkKeepActivePanel"

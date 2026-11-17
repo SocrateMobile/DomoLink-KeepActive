@@ -19,6 +19,16 @@ class DomolinkKeepActivePanel extends HTMLElement {
     this._localRemaining = {};
   }
 
+  _escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   set hass(hass) {
     const isFirst = !this._hass;
     this._hass = hass;
