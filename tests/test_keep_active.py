@@ -83,6 +83,7 @@ if "homeassistant" not in sys.modules:
 
     ha_er = make_pkg("homeassistant.helpers.entity_registry")
     ha_er.async_get = MagicMock()
+    ha_er.async_entries_for_device = MagicMock(return_value=[])
 
     ha_components = make_pkg("homeassistant.components")
     ha_frontend = make_pkg("homeassistant.components.frontend")
@@ -526,13 +527,11 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         mock_entry.device_id = "device_123"
 
         mock_update_entry = MagicMock()
+        mock_update_entry.entity_id = "update.radar_salon"
         mock_update_entry.device_id = "device_123"
         mock_update_entry.domain = "update"
 
         mock_er.async_get.return_value.async_get.return_value = mock_entry
-        mock_er.async_get.return_value.entities = {
-            "update.radar_salon": mock_update_entry,
-        }
         mock_dr.async_get.return_value.async_get.return_value = MagicMock(identifiers=[("zha", "00:11:22:33:44:55")])
 
         # State with update in progress at 42.5%
@@ -547,6 +546,7 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.hass.states.get.return_value = update_state
 
         with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_er.async_get.return_value), \
+             patch("homeassistant.helpers.entity_registry.async_entries_for_device", return_value=[mock_update_entry]), \
              patch("homeassistant.helpers.device_registry.async_get", return_value=mock_dr.async_get.return_value):
             enrichment = ota.get_device_enrichment("binary_sensor.radar_salon")
             self.assertEqual(enrichment["update_percentage"], 42.5)
@@ -588,7 +588,16 @@ class TestDomoLinkKeepActive(unittest.TestCase):
             captured_handler = handler
             return lambda: None
 
-        with patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track):
+        mock_source_entry = MagicMock(device_id="dev_1")
+        mock_update_entry = MagicMock(entity_id="update.radar", domain="update")
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get.return_value = mock_source_entry
+
+        with (
+            patch("custom_components.domolink_keep_active.ota_manager.er.async_get", return_value=mock_ent_reg),
+            patch("custom_components.domolink_keep_active.ota_manager.er.async_entries_for_device", return_value=[mock_update_entry]),
+            patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track),
+        ):
             ota.async_setup_auto_ota_listener()
 
         self.assertIsNotNone(captured_handler)
@@ -986,13 +995,26 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertEqual(session["duration_minutes"], 90)
 
         captured_handler = None
+        captured_entities = None
         def mock_track(hass, entities, handler):
-            nonlocal captured_handler
+            nonlocal captured_handler, captured_entities
+            captured_entities = entities
             captured_handler = handler
             return lambda: None
 
-        with patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track):
+        mock_source_entry = MagicMock(device_id="dev_1")
+        mock_update_entry = MagicMock(entity_id="update.radar", domain="update")
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get.return_value = mock_source_entry
+
+        with (
+            patch("custom_components.domolink_keep_active.ota_manager.er.async_get", return_value=mock_ent_reg),
+            patch("custom_components.domolink_keep_active.ota_manager.er.async_entries_for_device", return_value=[mock_update_entry]),
+            patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track),
+        ):
             ota.async_setup_auto_ota_listener()
+
+        self.assertEqual(captured_entities, ["update.radar"])
 
         # Fire update in_progress start
         event = MagicMock()
@@ -1008,6 +1030,38 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         self.assertEqual(session_after["duration_minutes"], 90)
         self.assertEqual(session_after["ping_count"], pings_before)
 
+    def test_ota_manager_tracked_entities_and_refresh(self):
+        """Test _get_tracked_update_entities and async_refresh_auto_ota_listener."""
+        ota = OtaKeepAwakeManager(self.hass)
+        rules = [{CONF_RULE_ID: "binary_sensor.s1", CONF_SOURCE_ENTITY: "binary_sensor.s1"}]
+        ota.set_rules_provider(lambda: rules)
+
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get.side_effect = lambda eid: MagicMock(device_id=f"dev_{eid}")
+        def mock_entries_for_dev(reg, dev_id):
+            if dev_id == "dev_binary_sensor.s1":
+                return [MagicMock(entity_id="update.s1", domain="update"), MagicMock(entity_id="sensor.s1_bat", domain="sensor")]
+            if dev_id == "dev_switch.s2":
+                return [MagicMock(entity_id="update.s2", domain="update")]
+            return []
+
+        unsub_calls = []
+        def mock_track(hass, entities, handler):
+            return lambda: unsub_calls.append(list(entities))
+
+        with (
+            patch("custom_components.domolink_keep_active.ota_manager.er.async_get", return_value=mock_ent_reg),
+            patch("custom_components.domolink_keep_active.ota_manager.er.async_entries_for_device", side_effect=mock_entries_for_dev),
+            patch("custom_components.domolink_keep_active.ota_manager.async_track_state_change_event", side_effect=mock_track) as track_mock,
+        ):
+            ota.async_setup_auto_ota_listener()
+            self.assertEqual(track_mock.call_args[0][1], ["update.s1"])
+
+            rules.append({CONF_RULE_ID: "switch.s2", CONF_SOURCE_ENTITY: "switch.s2"})
+            ota.async_refresh_auto_ota_listener()
+            self.assertEqual(len(unsub_calls), 1)
+            self.assertEqual(track_mock.call_args[0][1], ["update.s1", "update.s2"])
+
     def test_api_burst_and_clear_logs(self):
         """Test API endpoints for burst_ota and clear_logs."""
         ota = OtaKeepAwakeManager(self.hass)
@@ -1020,7 +1074,7 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         mock_entry = MagicMock()
         mock_entry.entry_id = "test_entry"
         mock_entry.options = {CONF_RULES: [{CONF_RULE_ID: "binary_sensor.radar", CONF_SOURCE_ENTITY: "binary_sensor.radar"}]}
-        api._get_active_entry = MagicMock(return_value=mock_entry)
+        self.hass.config_entries.async_entries = MagicMock(return_value=[mock_entry])
 
         # 1. Burst action
         req_burst = MagicMock()
@@ -1036,6 +1090,95 @@ class TestDomoLinkKeepActive(unittest.TestCase):
         req_clear.json = AsyncMock(return_value={})
         res_clear = asyncio.run(api.post(req_clear, "clear_logs"))
         self.assertEqual(res_clear["data"]["status"], "ok")
+
+    def test_api_multi_entry_routing_and_partial_update(self):
+        """Test multi-ConfigEntry aggregation, routing, partial update_ota_params, and secondary entry removal."""
+        entry_1 = MagicMock()
+        entry_1.entry_id = "entry_1"
+        entry_1.data = {}
+        entry_1.options = {
+            CONF_RULES: [
+                {
+                    CONF_RULE_ID: "binary_sensor.r1",
+                    CONF_SOURCE_ENTITY: "binary_sensor.r1",
+                    CONF_PING_METHOD: "z2m_get",
+                    CONF_AUTO_OTA_TRIGGER: False,
+                }
+            ]
+        }
+
+        entry_2 = MagicMock()
+        entry_2.entry_id = "entry_2"
+        entry_2.data = {}
+        entry_2.options = {
+            CONF_RULES: [
+                {
+                    CONF_RULE_ID: "switch.r2",
+                    CONF_SOURCE_ENTITY: "switch.r2",
+                    CONF_PING_METHOD: "zha_ping",
+                    CONF_AUTO_OTA_TRIGGER: False,
+                }
+            ]
+        }
+
+        self.hass.config_entries.async_entries = MagicMock(return_value=[entry_1, entry_2])
+        self.hass.config_entries.async_update_entry = MagicMock()
+        self.hass.config_entries.async_remove = AsyncMock()
+        self.hass.states.get = MagicMock(return_value=None)
+        self.hass.states.async_all = MagicMock(return_value=[])
+
+        ota = OtaKeepAwakeManager(self.hass)
+        api = DomolinkKeepActiveApiView(self.hass, ota)
+
+        # 1. GET aggregates both entries
+        req_get = MagicMock()
+        req_get.get = MagicMock(return_value=MagicMock(is_admin=True))
+        res_get = asyncio.run(api.get(req_get, "data"))
+        self.assertEqual(len(res_get["data"]["rules"]), 2)
+
+        # 2. update_ota_params on rule_2 without ping_method/auto_ota_trigger preserves them and routes to entry_2
+        req_upd = MagicMock()
+        req_upd.get = MagicMock(return_value=MagicMock(is_admin=True))
+        req_upd.json = AsyncMock(return_value={"rule_id": "switch.r2", "duration": 45, "interval": 12})
+        res_upd = asyncio.run(api.post(req_upd, "update_ota_params"))
+        self.assertEqual(res_upd["status"], 200)
+        self.hass.config_entries.async_update_entry.assert_called_once()
+        updated_entry, kwargs = self.hass.config_entries.async_update_entry.call_args[0][0], self.hass.config_entries.async_update_entry.call_args[1]
+        self.assertEqual(updated_entry.entry_id, "entry_2")
+        saved_rule_2 = kwargs["options"][CONF_RULES][0]
+        self.assertEqual(saved_rule_2[CONF_OTA_DURATION], 45)
+        self.assertEqual(saved_rule_2[CONF_PING_INTERVAL], 12)
+        self.assertEqual(saved_rule_2[CONF_PING_METHOD], "zha_ping")
+        self.assertFalse(saved_rule_2[CONF_AUTO_OTA_TRIGGER])
+
+        # 3. delete_rule on rule_2 removes empty secondary entry_2
+        req_del = MagicMock()
+        req_del.get = MagicMock(return_value=MagicMock(is_admin=True))
+        req_del.json = AsyncMock(return_value={"rule_id": "switch.r2"})
+        res_del = asyncio.run(api.post(req_del, "delete_rule"))
+        self.assertEqual(res_del["status"], 200)
+        self.hass.config_entries.async_remove.assert_awaited_once_with("entry_2")
+
+    def test_api_input_validation_returns_400(self):
+        """Test invalid inputs return HTTP 400."""
+        entry = MagicMock()
+        entry.entry_id = "entry_1"
+        entry.data = {}
+        entry.options = {CONF_RULES: [{CONF_RULE_ID: "binary_sensor.r1", CONF_SOURCE_ENTITY: "binary_sensor.r1"}]}
+        self.hass.config_entries.async_entries = MagicMock(return_value=[entry])
+
+        api = DomolinkKeepActiveApiView(self.hass, OtaKeepAwakeManager(self.hass))
+
+        def post_action(action, payload):
+            req = MagicMock()
+            req.get = MagicMock(return_value=MagicMock(is_admin=True))
+            req.json = AsyncMock(return_value=payload)
+            return asyncio.run(api.post(req, action))
+
+        self.assertEqual(post_action("save_rule", {"source_entity": "light.invalid"})["status"], 400)
+        self.assertEqual(post_action("save_rule", {"source_entity": "binary_sensor.ok", "ping_method": "bogus"})["status"], 400)
+        self.assertEqual(post_action("update_ota_params", {"rule_id": "binary_sensor.r1", "duration": "nan"})["status"], 400)
+        self.assertEqual(post_action("start_ota_update", {"rule_id": "binary_sensor.r1", "update_entity_id": "sensor.not_update"})["status"], 400)
 
 
 if __name__ == "__main__":

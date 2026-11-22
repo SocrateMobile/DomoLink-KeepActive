@@ -49,7 +49,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "ota_manager" not in hass.data[DOMAIN]:
         ota_manager = OtaKeepAwakeManager(hass)
         ota_manager.set_rules_provider(lambda: _get_all_rules_across_entries(hass))
-        ota_manager.async_setup_auto_ota_listener()
         hass.data[DOMAIN]["ota_manager"] = ota_manager
 
         # Register REST API View
@@ -60,19 +59,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "rules": rules,
     }
+    hass.data[DOMAIN]["ota_manager"].async_refresh_auto_ota_listener()
 
     # 2. Register frontend static path and panel in left sidebar
     frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
-    if hasattr(hass, "http"):
+    if hasattr(hass, "http") and not hass.data[DOMAIN].get("static_registered"):
         if hasattr(hass.http, "async_register_static_paths"):
             from homeassistant.components.http import StaticPathConfig
 
             await hass.http.async_register_static_paths(
                 [StaticPathConfig(FRONTEND_URL_PATH, frontend_dir, cache_headers=False)]
             )
+            hass.data[DOMAIN]["static_registered"] = True
         elif hasattr(hass.http, "register_static_path"):
             try:
                 hass.http.register_static_path(FRONTEND_URL_PATH, frontend_dir, cache_headers=False)
+                hass.data[DOMAIN]["static_registered"] = True
             except Exception as err:
                 _LOGGER.debug("register_static_path: %s", err)
 
@@ -125,16 +127,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
         # If no more entries, clean up manager and remove panel
-        remaining_entries = [k for k in hass.data[DOMAIN] if k != "ota_manager"]
+        remaining_entries = [
+            k for k in hass.data[DOMAIN] if k not in ("ota_manager", "static_registered")
+        ]
         if not remaining_entries:
             ota_manager: OtaKeepAwakeManager = hass.data[DOMAIN].pop("ota_manager", None)
             if ota_manager:
                 ota_manager.async_stop_all()
             _async_remove_panel(hass)
+        else:
+            ota_manager: OtaKeepAwakeManager = hass.data[DOMAIN].get("ota_manager")
+            if ota_manager:
+                ota_manager.async_refresh_auto_ota_listener()
 
     return unload_ok
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry when options are modified."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Update rules in-place without destroying ota_manager or HTTP view."""
+    domain_data = hass.data.get(DOMAIN, {})
+    if entry.entry_id in domain_data:
+        domain_data[entry.entry_id]["rules"] = get_rules_from_entry(entry)
+    ota_manager = domain_data.get("ota_manager")
+    if ota_manager is not None:
+        ota_manager.async_refresh_auto_ota_listener()
+    else:
+        await hass.config_entries.async_reload(entry.entry_id)

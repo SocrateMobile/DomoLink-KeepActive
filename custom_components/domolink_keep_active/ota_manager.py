@@ -517,9 +517,8 @@ class OtaKeepAwakeManager:
                         break
 
             # Scan entities on the same device
-            for e_id, e_entry in ent_reg.entities.items():
-                if e_entry.device_id != device_id:
-                    continue
+            for e_entry in er.async_entries_for_device(ent_reg, device_id):
+                e_id = e_entry.entity_id
 
                 state = self.hass.states.get(e_id)
                 if not state:
@@ -580,10 +579,49 @@ class OtaKeepAwakeManager:
 
         return enrichment
 
+    def _get_tracked_update_entities(self) -> list[str]:
+        """Return sorted, deduplicated list of update.* entities associated with configured rules."""
+        tracked: set[str] = set()
+        try:
+            ent_reg = er.async_get(self.hass)
+            for rule in self._get_all_rules():
+                source = rule.get(CONF_SOURCE_ENTITY, "")
+                if not source:
+                    continue
+                entry = ent_reg.async_get(source)
+                if not entry or not entry.device_id:
+                    continue
+                for dev_entry in er.async_entries_for_device(ent_reg, entry.device_id):
+                    if dev_entry.domain == "update":
+                        tracked.add(dev_entry.entity_id)
+        except Exception as exc:
+            _LOGGER.debug("Erreur résolution des entités update.*: %s", exc)
+        return sorted(tracked)
+
+    def async_refresh_auto_ota_listener(self) -> None:
+        """Refresh the auto-OTA listener when rules or entries change."""
+        self.async_setup_auto_ota_listener()
+
     def async_setup_auto_ota_listener(self) -> None:
         """Listen to state change events from update.* entities to auto-trigger Keep-Awake."""
         if self._update_listener:
+            try:
+                self._update_listener()
+            except Exception:
+                pass
+            self._update_listener = None
+
+        tracked_entities = self._get_tracked_update_entities()
+        if not tracked_entities:
             return
+
+        def _safe_float(val: Any) -> float | None:
+            if val is None:
+                return None
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
 
         @callback
         def _handle_update_event(event: Event) -> None:
@@ -600,8 +638,8 @@ class OtaKeepAwakeManager:
             old_in_progress = bool(old_state.attributes.get("in_progress", False)) if old_state else False
 
             # Check update percentage and versions
-            new_pct = new_state.attributes.get("update_percentage")
-            old_pct = old_state.attributes.get("update_percentage") if old_state else None
+            new_pct = _safe_float(new_state.attributes.get("update_percentage"))
+            old_pct = _safe_float(old_state.attributes.get("update_percentage")) if old_state else None
             installed_ver = new_state.attributes.get("installed_version")
             latest_ver = new_state.attributes.get("latest_version")
 
@@ -612,10 +650,10 @@ class OtaKeepAwakeManager:
                     and (
                         new_state.state == "off"
                         or (installed_ver and installed_ver == latest_ver)
-                        or (old_pct is not None and float(old_pct) >= 99.0)
+                        or (old_pct is not None and old_pct >= 99.0)
                     )
                 )
-                or (new_pct is not None and float(new_pct) >= 100.0 and not new_in_progress)
+                or (new_pct is not None and new_pct >= 100.0 and not new_in_progress)
             )
 
             # Check if this update entity belongs to one of our rules
@@ -711,7 +749,7 @@ class OtaKeepAwakeManager:
 
         self._update_listener = async_track_state_change_event(
             self.hass,
-            [],
+            tracked_entities,
             _handle_update_event,
         )
 

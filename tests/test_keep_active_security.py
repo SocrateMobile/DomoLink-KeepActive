@@ -17,7 +17,7 @@ def test_manifest_structure_and_version():
 
     assert manifest["domain"] == "domolink_keep_active"
     assert manifest["name"] == "DomoLink KeepActive"
-    assert manifest["version"] == "1.2.7"
+    assert manifest["version"] == "1.2.8"
     assert manifest["codeowners"] == ["@SocrateMobile"]
 
 
@@ -113,3 +113,35 @@ def test_panel_js_defines_escape_html():
         assert any(
             line.strip().startswith("_escapeHtml(") for line in code.splitlines()
         ), "_escapeHtml method must be defined on DomolinkKeepActivePanel"
+
+
+def test_panel_js_xss_escaping_and_css_escape():
+    """Verify all dynamic interpolations in domolink-keep-active-panel.js are escaped."""
+    panel_path = os.path.join(COMPONENT_DIR, "frontend", "domolink-keep-active-panel.js")
+    with open(panel_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    # No unescaped data-rule-id="${rId}" in HTML templates
+    assert 'data-rule-id="${rId}"' not in code, "Unescaped data-rule-id=${rId} found"
+    # CSS.escape(rId) must be used in querySelector calls
+    assert 'data-rule-id="${rId}"]' not in code, "Unescaped querySelector data-rule-id=${rId} found"
+    assert "CSS.escape(rId)" in code
+
+    # Specific previously unescaped fields must be escaped
+    assert "`🚀 Firmware v${enrich.latest_version" not in code
+    assert "${r.source_entity}" not in code
+    assert "${e.entity_id}" not in code
+    assert "${e.name}" not in code
+    assert "${r.name" not in code
+    assert "${session.last_ping_time_str" not in code
+
+
+def test_strings_json_matches_english():
+    """Verify strings.json is aligned with translations/en.json."""
+    strings_path = os.path.join(COMPONENT_DIR, "strings.json")
+    en_path = os.path.join(COMPONENT_DIR, "translations", "en.json")
+    with open(strings_path, "r", encoding="utf-8") as f:
+        strings_data = json.load(f)
+    with open(en_path, "r", encoding="utf-8") as f:
+        en_data = json.load(f)
+    assert strings_data == en_data

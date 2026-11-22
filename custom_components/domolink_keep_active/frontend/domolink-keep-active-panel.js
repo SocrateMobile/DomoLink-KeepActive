@@ -703,7 +703,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div>
             <h1 style="display:flex; align-items:center; gap:8px;">
               DomoLink KeepActive
-              <span class="badge-version">v1.2.5 • ⚡ DÉFIBRILLATEUR OTA</span>
+              <span class="badge-version">v1.2.8 • ⚡ DÉFIBRILLATEUR OTA</span>
             </h1>
             <div style="font-size:11px; color:#80deea; letter-spacing:0.8px; font-weight:600;">ANTI DEEP-SLEEP • SENTINELLE ZIGBEE</div>
           </div>
@@ -814,17 +814,24 @@ class DomolinkKeepActivePanel extends HTMLElement {
 
   _renderCard(rule) {
     const rId = rule.rule_id || rule.source_entity;
+    const escId = this._escapeHtml(rId);
     const session = rule.ota_session || {};
     const isActive = session.active;
     const remaining = this._localRemaining[rId] !== undefined ? this._localRemaining[rId] : session.remaining_seconds || 0;
     const enrich = rule.device_enrichment || {};
+    const otaDur = Number(rule.ota_duration) || 30;
+    const pingInt = Number(rule.ping_interval) || 5;
+    const holdDur = Number.isFinite(Number(rule.hold_duration)) ? Number(rule.hold_duration) : 0;
+    const gracePer = Number.isFinite(Number(rule.grace_period)) ? Number(rule.grace_period) : 0;
+    const pctNum = enrich.update_percentage !== null && enrich.update_percentage !== undefined ? Number(enrich.update_percentage) : null;
+    const pctClamped = pctNum !== null && Number.isFinite(pctNum) ? Math.min(100, Math.max(2, pctNum)) : 40;
 
     let stateClass = "badge-off";
     if (rule.source_state === "on") stateClass = "badge-on";
     else if (rule.source_state === "unavailable" || rule.source_state === "unknown") stateClass = "badge-unavail";
 
     return `
-      <div class="card ${isActive ? "ota-active" : ""}" data-rule-id="${rId}">
+      <div class="card ${isActive ? "ota-active" : ""}" data-rule-id="${escId}">
         <div class="card-header">
           <div class="card-title-box">
             <h3 class="card-title">
@@ -835,8 +842,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
           </div>
           <div class="badges-row">
             <span class="badge ${stateClass}">${this._escapeHtml(rule.source_state)}</span>
-            ${enrich.battery_level !== null ? `<span class="badge badge-battery">🔋 ${enrich.battery_level}%</span>` : ""}
-            ${enrich.linkquality !== null ? `<span class="badge badge-lqi">📶 ${enrich.linkquality} LQI</span>` : ""}
+            ${enrich.battery_level !== null && enrich.battery_level !== undefined ? `<span class="badge badge-battery">🔋 ${Number(enrich.battery_level) || 0}%</span>` : ""}
+            ${enrich.linkquality !== null && enrich.linkquality !== undefined ? `<span class="badge badge-lqi">📶 ${Number(enrich.linkquality) || 0} LQI</span>` : ""}
           </div>
         </div>
 
@@ -846,18 +853,18 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div class="firmware-banner ${enrich.in_progress ? "in-progress" : ""}">
             <div class="fw-top-row">
               <div class="fw-info">
-                <strong>${enrich.in_progress ? "⏳ Transfert OTA en cours..." : `🚀 Firmware v${enrich.latest_version || "disponible"}`}</strong>
+                <strong>${enrich.in_progress ? "⏳ Transfert OTA en cours..." : `🚀 Firmware v${this._escapeHtml(enrich.latest_version || "disponible")}`}</strong>
                 <span>Installé : v${this._escapeHtml(enrich.installed_version || "inconnue")}${enrich.latest_version ? ` → v${this._escapeHtml(enrich.latest_version)}` : ""}</span>
               </div>
               ${
                 enrich.in_progress
                   ? `
-                <span class="fw-pct-badge" data-rule-id="${rId}">
-                  ${enrich.update_percentage !== null ? `${enrich.update_percentage}%` : "Préparation..."}
+                <span class="fw-pct-badge" data-rule-id="${escId}">
+                  ${pctNum !== null && Number.isFinite(pctNum) ? `${pctNum}%` : "Préparation..."}
                 </span>
               `
                   : `
-                <button class="fw-btn btn-install-ota" data-rule-id="${this._escapeHtml(rId)}" data-update-id="${this._escapeHtml(enrich.update_entity_id || "")}">
+                <button class="fw-btn btn-install-ota" data-rule-id="${escId}" data-update-id="${this._escapeHtml(enrich.update_entity_id || "")}">
                   Lancer MAJ & Maintien
                 </button>
               `
@@ -869,9 +876,9 @@ class DomolinkKeepActivePanel extends HTMLElement {
                 ? `
               <div class="fw-progress-track">
                 <div
-                  class="fw-progress-fill ${enrich.update_percentage === null ? "indeterminate" : ""}"
-                  data-rule-id="${rId}"
-                  style="width: ${enrich.update_percentage !== null ? Math.max(2, enrich.update_percentage) : 40}%;"
+                  class="fw-progress-fill ${pctNum === null ? "indeterminate" : ""}"
+                  data-rule-id="${escId}"
+                  style="width: ${pctClamped}%;"
                 ></div>
               </div>
             `
@@ -899,7 +906,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <!-- Bouton Toggle Principal -->
           <button
             class="ota-toggle-btn ${isActive ? "btn-stop" : "btn-start"} toggle-ota-btn"
-            data-rule-id="${rId}"
+            data-rule-id="${escId}"
           >
             ${isActive ? "🛑 Arrêter la défibrillation" : "⚡ Activer le défibrillateur OTA"}
           </button>
@@ -909,20 +916,20 @@ class DomolinkKeepActivePanel extends HTMLElement {
               ? `
             <div class="ota-live-status">
               <div>
-                <div>Temps restant : <span class="ota-timer-text timer-display" data-rule-id="${rId}">${this._formatTime(remaining)}</span></div>
+                <div>Temps restant : <span class="ota-timer-text timer-display" data-rule-id="${escId}">${this._formatTime(remaining)}</span></div>
                 <div style="font-size:11px; color:var(--secondary-text-color, #757575); margin-top:2px;">
-                  Dernier ping : <span class="last-ping-display" data-rule-id="${rId}">${session.last_ping_time_str || "Aucun"}</span>
+                  Dernier ping : <span class="last-ping-display" data-rule-id="${escId}">${this._escapeHtml(session.last_ping_time_str || "Aucun")}</span>
                 </div>
               </div>
               <div style="display:flex; gap:6px; align-items:center;">
-                <button class="icon-btn btn-extend-ota" data-rule-id="${rId}" title="Prolonger la session de 15 minutes">
+                <button class="icon-btn btn-extend-ota" data-rule-id="${escId}" title="Prolonger la session de 15 minutes">
                   ➕ 15 min
                 </button>
-                <button class="icon-btn btn-burst-ota ${session.is_bursting ? "bursting" : ""}" data-rule-id="${rId}" title="Envoyer 1 ping/seconde pendant 15s pour réveiller le capteur en phase Preparing">
+                <button class="icon-btn btn-burst-ota ${session.is_bursting ? "bursting" : ""}" data-rule-id="${escId}" title="Envoyer 1 ping/seconde pendant 15s pour réveiller le capteur en phase Preparing">
                   ${session.is_bursting ? "🔥 Salve..." : "🔥 Salve 15s"}
                 </button>
-                <button class="icon-btn btn-ping-now" data-rule-id="${rId}" title="Envoyer un ping immédiat">
-                  ⚡ Ping (${session.ping_count || 0})
+                <button class="icon-btn btn-ping-now" data-rule-id="${escId}" title="Envoyer un ping immédiat">
+                  ⚡ Ping (${Number(session.ping_count) || 0})
                 </button>
               </div>
             </div>
@@ -934,7 +941,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div class="slider-group">
             <div class="slider-label-row">
               <span>Durée totale du maintien :</span>
-              <span class="slider-val-tag dur-val" data-rule-id="${rId}">${rule.ota_duration || 30} min</span>
+              <span class="slider-val-tag dur-val" data-rule-id="${escId}">${otaDur} min</span>
             </div>
             <input
               type="range"
@@ -942,8 +949,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
               min="10"
               max="90"
               step="1"
-              value="${rule.ota_duration || 30}"
-              data-rule-id="${rId}"
+              value="${otaDur}"
+              data-rule-id="${escId}"
             />
           </div>
 
@@ -951,7 +958,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div class="slider-group">
             <div class="slider-label-row">
               <span>Intervalle entre chaque ping :</span>
-              <span class="slider-val-tag int-val" data-rule-id="${rId}">${rule.ping_interval || 5} s</span>
+              <span class="slider-val-tag int-val" data-rule-id="${escId}">${pingInt} s</span>
             </div>
             <input
               type="range"
@@ -959,8 +966,8 @@ class DomolinkKeepActivePanel extends HTMLElement {
               min="1"
               max="60"
               step="1"
-              value="${rule.ping_interval || 5}"
-              data-rule-id="${rId}"
+              value="${pingInt}"
+              data-rule-id="${escId}"
             />
           </div>
         </div>
@@ -968,11 +975,11 @@ class DomolinkKeepActivePanel extends HTMLElement {
         <!-- Pied de carte -->
         <div class="card-footer">
           <div class="sentinel-summary">
-            Maintien : ${rule.hold_duration}s | Grâce : ${rule.grace_period}s
+            Maintien : ${holdDur}s | Grâce : ${gracePer}s
           </div>
           <div class="card-actions">
-            <button class="icon-btn btn-edit-rule" data-rule-id="${rId}">⚙️ Paramètres</button>
-            <button class="icon-btn btn-del btn-del-rule" data-rule-id="${rId}">🗑️</button>
+            <button class="icon-btn btn-edit-rule" data-rule-id="${escId}">⚙️ Paramètres</button>
+            <button class="icon-btn btn-del btn-del-rule" data-rule-id="${escId}">🗑️</button>
           </div>
         </div>
       </div>
@@ -1004,12 +1011,12 @@ class DomolinkKeepActivePanel extends HTMLElement {
             <label class="form-label">Entité source Home Assistant</label>
             ${
               isEdit
-                ? `<input type="text" class="form-input" id="modalSourceEntity" value="${r.source_entity}" disabled />`
+                ? `<input type="text" class="form-input" id="modalSourceEntity" value="${this._escapeHtml(r.source_entity)}" disabled />`
                 : `
                 <select class="form-select" id="modalSourceEntity">
                   <option value="">-- Sélectionnez une entité --</option>
                   ${this._availableEntities
-                    .map((e) => `<option value="${e.entity_id}">${e.name} (${e.entity_id})</option>`)
+                    .map((e) => `<option value="${this._escapeHtml(e.entity_id)}">${this._escapeHtml(e.name)} (${this._escapeHtml(e.entity_id)})</option>`)
                     .join("")}
                 </select>
               `
@@ -1018,19 +1025,19 @@ class DomolinkKeepActivePanel extends HTMLElement {
 
           <div class="form-group">
             <label class="form-label">Nom personnalisé</label>
-            <input type="text" class="form-input" id="modalName" placeholder="Ex: Détecteur Salon" value="${r.name || ""}" />
+            <input type="text" class="form-input" id="modalName" placeholder="Ex: Détecteur Salon" value="${this._escapeHtml(r.name || "")}" />
           </div>
 
           <h3 style="margin-bottom:0; color:#0288d1; font-size:14px;">Paramètres OTA Keep-Awake</h3>
 
           <div class="form-group">
-            <label class="form-label">Durée totale OTA (10 à 90 min) : <span id="modalDurVal">${r.ota_duration || 30} min</span></label>
-            <input type="range" class="range-slider" id="modalOtaDur" min="10" max="90" step="1" value="${r.ota_duration || 30}" />
+            <label class="form-label">Durée totale OTA (10 à 90 min) : <span id="modalDurVal">${Number(r.ota_duration) || 30} min</span></label>
+            <input type="range" class="range-slider" id="modalOtaDur" min="10" max="90" step="1" value="${Number(r.ota_duration) || 30}" />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Intervalle de ping (1 à 60 s) : <span id="modalIntVal">${r.ping_interval || 5} s</span></label>
-            <input type="range" class="range-slider" id="modalOtaInt" min="1" max="60" step="1" value="${r.ping_interval || 5}" />
+            <label class="form-label">Intervalle de ping (1 à 60 s) : <span id="modalIntVal">${Number(r.ping_interval) || 5} s</span></label>
+            <input type="range" class="range-slider" id="modalOtaInt" min="1" max="60" step="1" value="${Number(r.ping_interval) || 5}" />
           </div>
 
           <div class="form-group">
@@ -1070,11 +1077,11 @@ class DomolinkKeepActivePanel extends HTMLElement {
           <div style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
               <label class="form-label">Maintien actif (s)</label>
-              <input type="number" class="form-input" id="modalHold" min="0" max="3600" value="${r.hold_duration}" />
+              <input type="number" class="form-input" id="modalHold" min="0" max="3600" value="${Number.isFinite(Number(r.hold_duration)) ? Number(r.hold_duration) : 30}" />
             </div>
             <div class="form-group" style="flex:1;">
               <label class="form-label">Période de grâce (s)</label>
-              <input type="number" class="form-input" id="modalGrace" min="0" max="3600" value="${r.grace_period}" />
+              <input type="number" class="form-input" id="modalGrace" min="0" max="3600" value="${Number.isFinite(Number(r.grace_period)) ? Number(r.grace_period) : 60}" />
             </div>
           </div>
 
@@ -1100,6 +1107,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
 
     for (const rule of this._rules) {
       const rId = rule.rule_id || rule.source_entity;
+      const selId = CSS.escape(rId);
       const remaining = this._localRemaining[rId] || 0;
       const session = rule.ota_session || {};
       const enrich = rule.device_enrichment || {};
@@ -1108,7 +1116,7 @@ class DomolinkKeepActivePanel extends HTMLElement {
       totalPings += session.ping_count || 0;
       if (enrich.update_available) updatesAvailableCount++;
 
-      const card = this.shadowRoot.querySelector(`.card[data-rule-id="${rId}"]`);
+      const card = this.shadowRoot.querySelector(`.card[data-rule-id="${selId}"]`);
       if (card) {
         const currentlyActive = card.classList.contains("ota-active");
         if (currentlyActive !== !!session.active) {
@@ -1117,22 +1125,22 @@ class DomolinkKeepActivePanel extends HTMLElement {
         }
       }
 
-      const timerEl = this.shadowRoot.querySelector(`.timer-display[data-rule-id="${rId}"]`);
+      const timerEl = this.shadowRoot.querySelector(`.timer-display[data-rule-id="${selId}"]`);
       if (timerEl) {
         timerEl.textContent = this._formatTime(remaining);
       }
 
-      const lastPingEl = this.shadowRoot.querySelector(`.last-ping-display[data-rule-id="${rId}"]`);
+      const lastPingEl = this.shadowRoot.querySelector(`.last-ping-display[data-rule-id="${selId}"]`);
       if (lastPingEl) {
         lastPingEl.textContent = session.last_ping_time_str || "Aucun";
       }
 
-      const pingBtn = this.shadowRoot.querySelector(`.btn-ping-now[data-rule-id="${rId}"]`);
+      const pingBtn = this.shadowRoot.querySelector(`.btn-ping-now[data-rule-id="${selId}"]`);
       if (pingBtn && !pingBtn.dataset.clicking) {
-        pingBtn.textContent = `⚡ Ping (${session.ping_count || 0})`;
+        pingBtn.textContent = `⚡ Ping (${Number(session.ping_count) || 0})`;
       }
 
-      const burstBtn = this.shadowRoot.querySelector(`.btn-burst-ota[data-rule-id="${rId}"]`);
+      const burstBtn = this.shadowRoot.querySelector(`.btn-burst-ota[data-rule-id="${selId}"]`);
       if (burstBtn) {
         burstBtn.textContent = session.is_bursting ? "🔥 Salve..." : "🔥 Salve 15s";
         if (session.is_bursting) {
@@ -1143,16 +1151,17 @@ class DomolinkKeepActivePanel extends HTMLElement {
       }
 
       // Update progress bar & percentage badge if in_progress
-      const pctBadge = this.shadowRoot.querySelector(`.fw-pct-badge[data-rule-id="${rId}"]`);
+      const pctBadge = this.shadowRoot.querySelector(`.fw-pct-badge[data-rule-id="${selId}"]`);
+      const pctNum = enrich.update_percentage !== null && enrich.update_percentage !== undefined ? Number(enrich.update_percentage) : null;
       if (pctBadge) {
-        pctBadge.textContent = enrich.update_percentage !== null ? `${enrich.update_percentage}%` : "Préparation...";
+        pctBadge.textContent = pctNum !== null && Number.isFinite(pctNum) ? `${pctNum}%` : "Préparation...";
       }
 
-      const progressFill = this.shadowRoot.querySelector(`.fw-progress-fill[data-rule-id="${rId}"]`);
+      const progressFill = this.shadowRoot.querySelector(`.fw-progress-fill[data-rule-id="${selId}"]`);
       if (progressFill) {
-        if (enrich.update_percentage !== null) {
+        if (pctNum !== null && Number.isFinite(pctNum)) {
           progressFill.classList.remove("indeterminate");
-          progressFill.style.width = `${Math.max(2, enrich.update_percentage)}%`;
+          progressFill.style.width = `${Math.min(100, Math.max(2, pctNum))}%`;
         } else {
           progressFill.classList.add("indeterminate");
           progressFill.style.width = "40%";
@@ -1236,8 +1245,9 @@ class DomolinkKeepActivePanel extends HTMLElement {
     this.shadowRoot.querySelectorAll(".toggle-ota-btn").forEach((btn) => {
       btn.onclick = () => {
         const rId = btn.dataset.ruleId;
-        const durSlider = this.shadowRoot.querySelector(`.ota-dur-slider[data-rule-id="${rId}"]`);
-        const intSlider = this.shadowRoot.querySelector(`.ota-int-slider[data-rule-id="${rId}"]`);
+        const selId = CSS.escape(rId);
+        const durSlider = this.shadowRoot.querySelector(`.ota-dur-slider[data-rule-id="${selId}"]`);
+        const intSlider = this.shadowRoot.querySelector(`.ota-int-slider[data-rule-id="${selId}"]`);
         this._apiCall("toggle_ota", {
           rule_id: rId,
           duration: durSlider ? parseInt(durSlider.value) : 30,
@@ -1294,12 +1304,13 @@ class DomolinkKeepActivePanel extends HTMLElement {
     // Sliders de durée
     this.shadowRoot.querySelectorAll(".ota-dur-slider").forEach((slider) => {
       const rId = slider.dataset.ruleId;
-      const tag = this.shadowRoot.querySelector(`.dur-val[data-rule-id="${rId}"]`);
+      const selId = CSS.escape(rId);
+      const tag = this.shadowRoot.querySelector(`.dur-val[data-rule-id="${selId}"]`);
       slider.oninput = (e) => {
         if (tag) tag.textContent = `${e.target.value} min`;
       };
       slider.onchange = (e) => {
-        const intSlider = this.shadowRoot.querySelector(`.ota-int-slider[data-rule-id="${rId}"]`);
+        const intSlider = this.shadowRoot.querySelector(`.ota-int-slider[data-rule-id="${selId}"]`);
         this._apiCall("update_ota_params", {
           rule_id: rId,
           duration: parseInt(e.target.value),
@@ -1311,12 +1322,13 @@ class DomolinkKeepActivePanel extends HTMLElement {
     // Sliders d'intervalle
     this.shadowRoot.querySelectorAll(".ota-int-slider").forEach((slider) => {
       const rId = slider.dataset.ruleId;
-      const tag = this.shadowRoot.querySelector(`.int-val[data-rule-id="${rId}"]`);
+      const selId = CSS.escape(rId);
+      const tag = this.shadowRoot.querySelector(`.int-val[data-rule-id="${selId}"]`);
       slider.oninput = (e) => {
         if (tag) tag.textContent = `${e.target.value} s`;
       };
       slider.onchange = (e) => {
-        const durSlider = this.shadowRoot.querySelector(`.ota-dur-slider[data-rule-id="${rId}"]`);
+        const durSlider = this.shadowRoot.querySelector(`.ota-dur-slider[data-rule-id="${selId}"]`);
         this._apiCall("update_ota_params", {
           rule_id: rId,
           duration: durSlider ? parseInt(durSlider.value) : 30,

@@ -1,7 +1,7 @@
 # DomoLink KeepActive
 
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/default)
-[![Version](https://img.shields.io/badge/version-1.2.5-blue.svg)](https://github.com/SocrateMobile/DomoLink-KeepActive)
+[![Version](https://img.shields.io/badge/version-1.2.8-blue.svg)](https://github.com/SocrateMobile/DomoLink-KeepActive)
 
 **DomoLink KeepActive** est une intégration pour Home Assistant conçue pour fiabiliser et stabiliser le comportement des entités domotiques (particulièrement **Zigbee** : **Zigbee2MQTT**, **ZHA**, **deCONZ**, etc.) et **maintenir éveillés les capteurs sur batterie pendant leurs mises à jour de firmware (OTA)**.
 

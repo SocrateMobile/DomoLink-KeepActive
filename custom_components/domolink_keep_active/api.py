@@ -6,6 +6,7 @@ from typing import Any
 from aiohttp import web
 
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import entity_registry as er
@@ -35,6 +36,9 @@ from .const import (
     DEFAULT_PING_INTERVAL,
     DEFAULT_PING_METHOD,
     DOMAIN,
+    OTA_FAILURE_MODES,
+    OTA_TIMEOUT_MODES,
+    PING_METHODS,
     SUPPORTED_DOMAINS,
 )
 from .helpers import get_platform_from_entity, get_rules_from_entry, normalize_ota_duration, normalize_ping_interval
@@ -55,10 +59,24 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         self.hass = hass
         self.ota_manager = ota_manager
 
-    def _get_active_entry(self):
-        """Return the first active DomoLink KeepActive config entry."""
-        entries = self.hass.config_entries.async_entries(DOMAIN)
-        return entries[0] if entries else None
+    def _get_all_entries(self) -> list[ConfigEntry]:
+        """Return all active DomoLink KeepActive config entries."""
+        return list(self.hass.config_entries.async_entries(DOMAIN))
+
+    def _find_entry_for_rule(
+        self, rule_id: str, source_entity: str | None = None
+    ) -> tuple[ConfigEntry | None, list[dict[str, Any]], int | None]:
+        """Locate the owning ConfigEntry, its rules list, and the rule index."""
+        for entry in self._get_all_entries():
+            rules = get_rules_from_entry(entry)
+            for idx, r in enumerate(rules):
+                if (
+                    r.get(CONF_RULE_ID) == rule_id
+                    or r.get(CONF_SOURCE_ENTITY) == rule_id
+                    or (source_entity and r.get(CONF_SOURCE_ENTITY) == source_entity)
+                ):
+                    return entry, rules, idx
+        return None, [], None
 
     async def get(self, request: web.Request, action: str) -> web.Response:
         """Handle GET requests from the panel."""
@@ -67,8 +85,9 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
             raise Unauthorized()
 
         if action in ("data", "state"):
-            entry = self._get_active_entry()
-            raw_rules = get_rules_from_entry(entry) if entry else []
+            raw_rules: list[dict[str, Any]] = []
+            for entry in self._get_all_entries():
+                raw_rules.extend(get_rules_from_entry(entry))
 
             enriched_rules = []
             for r in raw_rules:
@@ -129,21 +148,29 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         except Exception:
             body = {}
 
-        entry = self._get_active_entry()
-        if not entry:
+        entries = self._get_all_entries()
+        if not entries:
             return self.json({"error": "Aucune entrée de configuration KeepActive active"}, status=404)
-
-        rules = get_rules_from_entry(entry)
 
         # 1. TOGGLE OTA
         if action == "toggle_ota":
             rule_id = body.get("rule_id")
-            if not rule_id:
+            if not rule_id or not isinstance(rule_id, str):
                 return self.json({"error": "rule_id manquant"}, status=400)
 
             activate = body.get("active")
             duration = body.get("duration")
             interval = body.get("interval")
+            if duration is not None:
+                try:
+                    duration = normalize_ota_duration(int(duration))
+                except (ValueError, TypeError):
+                    return self.json({"error": "duration invalide"}, status=400)
+            if interval is not None:
+                try:
+                    interval = normalize_ping_interval(int(interval))
+                except (ValueError, TypeError):
+                    return self.json({"error": "interval invalide"}, status=400)
 
             if activate is False or (activate is None and self.ota_manager.get_session_state(rule_id).get("active")):
                 session = self.ota_manager.async_stop_ota(rule_id, reason="bouton panel")
@@ -158,24 +185,43 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         # 2. UPDATE OTA PARAMS
         if action == "update_ota_params":
             rule_id = body.get("rule_id")
-            if not rule_id:
+            if not rule_id or not isinstance(rule_id, str):
                 return self.json({"error": "rule_id manquant"}, status=400)
 
-            dur = normalize_ota_duration(body.get("duration", DEFAULT_OTA_DURATION))
-            interval = normalize_ping_interval(body.get("interval", DEFAULT_PING_INTERVAL))
-            method = body.get("ping_method", DEFAULT_PING_METHOD)
-            auto_trigger = bool(body.get("auto_ota_trigger", DEFAULT_AUTO_OTA_TRIGGER))
+            owner_entry, rules, idx = self._find_entry_for_rule(rule_id)
+            if owner_entry is None or idx is None:
+                return self.json({"error": "Règle introuvable"}, status=404)
 
-            for r in rules:
-                if r.get(CONF_RULE_ID) == rule_id:
-                    r[CONF_OTA_DURATION] = dur
-                    r[CONF_PING_INTERVAL] = interval
-                    r[CONF_PING_METHOD] = method
-                    r[CONF_AUTO_OTA_TRIGGER] = auto_trigger
-                    break
+            rule = rules[idx]
 
-            new_options = {**entry.options, CONF_RULES: rules}
-            self.hass.config_entries.async_update_entry(entry, options=new_options)
+            try:
+                dur = (
+                    normalize_ota_duration(int(body["duration"]))
+                    if "duration" in body and body["duration"] is not None
+                    else rule.get(CONF_OTA_DURATION, DEFAULT_OTA_DURATION)
+                )
+                interval = (
+                    normalize_ping_interval(int(body["interval"]))
+                    if "interval" in body and body["interval"] is not None
+                    else rule.get(CONF_PING_INTERVAL, DEFAULT_PING_INTERVAL)
+                )
+            except (ValueError, TypeError):
+                return self.json({"error": "Paramètres duration/interval invalides"}, status=400)
+
+            if "ping_method" in body and body["ping_method"] is not None:
+                method = body["ping_method"]
+                if method not in PING_METHODS:
+                    return self.json({"error": "ping_method invalide"}, status=400)
+                rule[CONF_PING_METHOD] = method
+
+            if "auto_ota_trigger" in body and body["auto_ota_trigger"] is not None:
+                rule[CONF_AUTO_OTA_TRIGGER] = bool(body["auto_ota_trigger"])
+
+            rule[CONF_OTA_DURATION] = dur
+            rule[CONF_PING_INTERVAL] = interval
+
+            new_options = {**owner_entry.options, CONF_RULES: rules}
+            self.hass.config_entries.async_update_entry(owner_entry, options=new_options)
 
             # Update live session if running
             session = self.ota_manager.get_session_state(rule_id)
@@ -184,7 +230,7 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
                     rule_id,
                     duration_minutes=dur,
                     ping_interval=interval,
-                    ping_method=method,
+                    ping_method=rule.get(CONF_PING_METHOD, DEFAULT_PING_METHOD),
                 )
 
             return self.json({"status": "ok", "rule_id": rule_id, "duration": dur, "interval": interval})
@@ -192,7 +238,7 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         # 3. PING NOW
         if action == "ping_now":
             rule_id = body.get("rule_id")
-            if not rule_id:
+            if not rule_id or not isinstance(rule_id, str):
                 return self.json({"error": "rule_id manquant"}, status=400)
 
             success = await self.ota_manager.async_send_ping(rule_id)
@@ -206,18 +252,28 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         # 3b. EXTEND OTA SESSION
         if action == "extend_ota":
             rule_id = body.get("rule_id")
-            if not rule_id:
+            if not rule_id or not isinstance(rule_id, str):
                 return self.json({"error": "rule_id manquant"}, status=400)
-            minutes = int(body.get("minutes", AUTO_EXTEND_MINUTES))
+            try:
+                minutes = int(body.get("minutes", AUTO_EXTEND_MINUTES))
+            except (ValueError, TypeError):
+                return self.json({"error": "minutes invalide"}, status=400)
+            if minutes <= 0:
+                return self.json({"error": "minutes doit être positif"}, status=400)
             session = self.ota_manager.async_extend_session(rule_id, minutes)
             return self.json({"status": "ok", "session": session})
 
         # 3c. BURST OTA SESSION (RAPID PINGS 15s)
         if action == "burst_ota":
             rule_id = body.get("rule_id")
-            if not rule_id:
+            if not rule_id or not isinstance(rule_id, str):
                 return self.json({"error": "rule_id manquant"}, status=400)
-            seconds = int(body.get("seconds", 15))
+            try:
+                seconds = int(body.get("seconds", 15))
+            except (ValueError, TypeError):
+                return self.json({"error": "seconds invalide"}, status=400)
+            if seconds <= 0:
+                return self.json({"error": "seconds doit être positif"}, status=400)
             session = await self.ota_manager.async_start_burst(rule_id, duration_seconds=seconds)
             return self.json({"status": "ok", "session": session})
 
@@ -229,81 +285,95 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         # 4. SAVE RULE (ADD OR MODIFY)
         if action == "save_rule":
             source_entity = body.get("source_entity")
-            if not source_entity:
-                return self.json({"error": "source_entity requis"}, status=400)
+            if (
+                not source_entity
+                or not isinstance(source_entity, str)
+                or "." not in source_entity
+                or source_entity.split(".", 1)[0] not in SUPPORTED_DOMAINS
+            ):
+                return self.json({"error": "source_entity invalide ou domaine non supporté"}, status=400)
 
             rule_id = body.get("rule_id") or source_entity
-            name = body.get("name", "").strip()
-            hold = int(body.get("hold_duration", DEFAULT_HOLD_DURATION))
-            grace = int(body.get("grace_period", DEFAULT_GRACE_PERIOD))
+            if not isinstance(rule_id, str):
+                return self.json({"error": "rule_id invalide"}, status=400)
+            name = str(body.get("name", "")).strip()
+
+            try:
+                hold = int(body.get("hold_duration", DEFAULT_HOLD_DURATION))
+                grace = int(body.get("grace_period", DEFAULT_GRACE_PERIOD))
+                ota_dur = normalize_ota_duration(int(body.get("ota_duration", DEFAULT_OTA_DURATION)))
+                ping_int = normalize_ping_interval(int(body.get("ping_interval", DEFAULT_PING_INTERVAL)))
+            except (ValueError, TypeError):
+                return self.json({"error": "Valeurs numériques invalides"}, status=400)
+
+            if hold < 0 or grace < 0:
+                return self.json({"error": "hold_duration et grace_period doivent être >= 0"}, status=400)
+
             optimistic = bool(body.get("optimistic", DEFAULT_OPTIMISTIC))
-            ota_dur = normalize_ota_duration(body.get("ota_duration", DEFAULT_OTA_DURATION))
-            ping_int = normalize_ping_interval(body.get("ping_interval", DEFAULT_PING_INTERVAL))
             ping_meth = body.get("ping_method", DEFAULT_PING_METHOD)
+            if ping_meth not in PING_METHODS:
+                return self.json({"error": "ping_method invalide"}, status=400)
+
             auto_ota = bool(body.get("auto_ota_trigger", DEFAULT_AUTO_OTA_TRIGGER))
             on_failure = body.get("on_ota_failure", DEFAULT_ON_OTA_FAILURE)
+            if on_failure not in OTA_FAILURE_MODES:
+                return self.json({"error": "on_ota_failure invalide"}, status=400)
+
             on_timeout = body.get("on_ota_timeout", DEFAULT_ON_OTA_TIMEOUT)
+            if on_timeout not in OTA_TIMEOUT_MODES:
+                return self.json({"error": "on_ota_timeout invalide"}, status=400)
 
-            updated = False
-            for i, r in enumerate(rules):
-                if r.get(CONF_RULE_ID) == rule_id or r.get(CONF_SOURCE_ENTITY) == source_entity:
-                    rules[i] = {
-                        CONF_RULE_ID: rule_id,
-                        CONF_SOURCE_ENTITY: source_entity,
-                        CONF_NAME: name,
-                        CONF_HOLD_DURATION: hold,
-                        CONF_GRACE_PERIOD: grace,
-                        CONF_OPTIMISTIC: optimistic,
-                        CONF_OTA_DURATION: ota_dur,
-                        CONF_PING_INTERVAL: ping_int,
-                        CONF_PING_METHOD: ping_meth,
-                        CONF_AUTO_OTA_TRIGGER: auto_ota,
-                        CONF_ON_OTA_FAILURE: on_failure,
-                        CONF_ON_OTA_TIMEOUT: on_timeout,
-                    }
-                    updated = True
-                    break
+            rule_payload = {
+                CONF_RULE_ID: rule_id,
+                CONF_SOURCE_ENTITY: source_entity,
+                CONF_NAME: name,
+                CONF_HOLD_DURATION: hold,
+                CONF_GRACE_PERIOD: grace,
+                CONF_OPTIMISTIC: optimistic,
+                CONF_OTA_DURATION: ota_dur,
+                CONF_PING_INTERVAL: ping_int,
+                CONF_PING_METHOD: ping_meth,
+                CONF_AUTO_OTA_TRIGGER: auto_ota,
+                CONF_ON_OTA_FAILURE: on_failure,
+                CONF_ON_OTA_TIMEOUT: on_timeout,
+            }
 
-            if not updated:
-                rules.append(
-                    {
-                        CONF_RULE_ID: rule_id,
-                        CONF_SOURCE_ENTITY: source_entity,
-                        CONF_NAME: name,
-                        CONF_HOLD_DURATION: hold,
-                        CONF_GRACE_PERIOD: grace,
-                        CONF_OPTIMISTIC: optimistic,
-                        CONF_OTA_DURATION: ota_dur,
-                        CONF_PING_INTERVAL: ping_int,
-                        CONF_PING_METHOD: ping_meth,
-                        CONF_AUTO_OTA_TRIGGER: auto_ota,
-                        CONF_ON_OTA_FAILURE: on_failure,
-                        CONF_ON_OTA_TIMEOUT: on_timeout,
-                    }
-                )
+            owner_entry, rules, idx = self._find_entry_for_rule(rule_id, source_entity)
+            if owner_entry is not None and idx is not None:
+                rules[idx] = rule_payload
+                target_entry = owner_entry
+            else:
+                target_entry = entries[0]
+                rules = get_rules_from_entry(target_entry)
+                rules.append(rule_payload)
 
-            new_options = {**entry.options, CONF_RULES: rules}
-            self.hass.config_entries.async_update_entry(entry, options=new_options)
-            await self.hass.config_entries.async_reload(entry.entry_id)
+            new_options = {**target_entry.options, CONF_RULES: rules}
+            self.hass.config_entries.async_update_entry(target_entry, options=new_options)
 
             return self.json({"status": "ok", "rule_id": rule_id, "rules_count": len(rules)})
 
         # 5. DELETE RULE
         if action == "delete_rule":
             rule_id = body.get("rule_id")
-            if not rule_id:
+            if not rule_id or not isinstance(rule_id, str):
                 return self.json({"error": "rule_id requis"}, status=400)
+
+            owner_entry, rules, idx = self._find_entry_for_rule(rule_id)
+            if owner_entry is None or idx is None:
+                return self.json({"error": "Règle introuvable"}, status=404)
 
             # Stop OTA if running
             self.ota_manager.async_stop_ota(rule_id, reason="règle supprimée")
 
             # Remove from list
-            updated_rules = [r for r in rules if r.get(CONF_RULE_ID) != rule_id and r.get(CONF_SOURCE_ENTITY) != rule_id]
+            updated_rules = [
+                r for r in rules if r.get(CONF_RULE_ID) != rule_id and r.get(CONF_SOURCE_ENTITY) != rule_id
+            ]
 
             # Clean registry
             try:
                 ent_reg = er.async_get(self.hass)
-                unique_id = f"{DOMAIN}_{entry.entry_id}_{rule_id}"
+                unique_id = f"{DOMAIN}_{owner_entry.entry_id}_{rule_id}"
                 platform = get_platform_from_entity(rule_id)
                 e_id = ent_reg.async_get_entity_id(platform, DOMAIN, unique_id)
                 if e_id:
@@ -311,9 +381,11 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
             except Exception as exc:
                 _LOGGER.debug("Erreur nettoyage registre: %s", exc)
 
-            new_options = {**entry.options, CONF_RULES: updated_rules}
-            self.hass.config_entries.async_update_entry(entry, options=new_options)
-            await self.hass.config_entries.async_reload(entry.entry_id)
+            if not updated_rules and len(entries) > 1:
+                await self.hass.config_entries.async_remove(owner_entry.entry_id)
+            else:
+                new_options = {**owner_entry.options, CONF_RULES: updated_rules}
+                self.hass.config_entries.async_update_entry(owner_entry, options=new_options)
 
             return self.json({"status": "ok", "deleted": rule_id, "rules_count": len(updated_rules)})
 
@@ -321,8 +393,10 @@ class DomolinkKeepActiveApiView(HomeAssistantView):
         if action == "start_ota_update":
             rule_id = body.get("rule_id")
             update_entity_id = body.get("update_entity_id")
-            if not rule_id or not update_entity_id:
+            if not rule_id or not isinstance(rule_id, str) or not update_entity_id:
                 return self.json({"error": "rule_id et update_entity_id requis"}, status=400)
+            if not isinstance(update_entity_id, str) or not update_entity_id.startswith("update."):
+                return self.json({"error": "update_entity_id invalide"}, status=400)
 
             # Start keep-awake & launch initial burst
             session = await self.ota_manager.async_start_ota(rule_id)

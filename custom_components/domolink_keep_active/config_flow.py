@@ -100,6 +100,12 @@ class DomoLinkKeepActiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_AUTO_OTA_TRIGGER: bool(
                         user_input.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER)
                     ),
+                    CONF_ON_OTA_FAILURE: user_input.get(
+                        CONF_ON_OTA_FAILURE, DEFAULT_ON_OTA_FAILURE
+                    ),
+                    CONF_ON_OTA_TIMEOUT: user_input.get(
+                        CONF_ON_OTA_TIMEOUT, DEFAULT_ON_OTA_TIMEOUT
+                    ),
                 }
                 entry_data = {
                     **user_input,
@@ -323,7 +329,17 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                 errors["base"] = "unsupported_domain"
             else:
                 rules = self._get_rules()
-                if any(r.get(CONF_SOURCE_ENTITY) == source_entity for r in rules):
+                all_entries = (
+                    list(self.hass.config_entries.async_entries(DOMAIN))
+                    if hasattr(self, "hass") and self.hass
+                    else [self.config_entry]
+                )
+                already_exists = any(
+                    r.get(CONF_SOURCE_ENTITY) == source_entity
+                    for e in all_entries
+                    for r in get_rules_from_entry(e)
+                )
+                if already_exists:
                     errors[CONF_SOURCE_ENTITY] = "already_configured"
                 else:
                     new_rule = {
@@ -342,6 +358,12 @@ class DomoLinkKeepActiveOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_PING_METHOD: user_input.get(CONF_PING_METHOD, DEFAULT_PING_METHOD),
                         CONF_AUTO_OTA_TRIGGER: bool(
                             user_input.get(CONF_AUTO_OTA_TRIGGER, DEFAULT_AUTO_OTA_TRIGGER)
+                        ),
+                        CONF_ON_OTA_FAILURE: user_input.get(
+                            CONF_ON_OTA_FAILURE, DEFAULT_ON_OTA_FAILURE
+                        ),
+                        CONF_ON_OTA_TIMEOUT: user_input.get(
+                            CONF_ON_OTA_TIMEOUT, DEFAULT_ON_OTA_TIMEOUT
                         ),
                     }
                     rules.append(new_rule)

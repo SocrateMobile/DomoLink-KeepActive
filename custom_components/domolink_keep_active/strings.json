@@ -2,99 +2,99 @@
   "config": {
     "step": {
       "user": {
-        "title": "Ajouter une entité KeepActive",
-        "description": "Sélectionnez l'entité source (Zigbee ou autre) à sécuriser et configurez les temporisations de maintien, de grâce et les paramètres de maintien éveillé OTA.",
+        "title": "Add a KeepActive Entity",
+        "description": "Select the source entity (Zigbee or other) to protect and configure hold, grace and OTA keep-awake parameters.",
         "data": {
-          "source_entity": "Entité source",
-          "name": "Nom personnalisé (optionnel)",
-          "hold_duration": "Durée de maintien actif (secondes)",
-          "grace_period": "Période de grâce indisponibilité (secondes)",
-          "optimistic": "Mode optimiste (retour d'état immédiat)",
-          "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
-          "ping_interval": "Intervalle entre chaque ping (secondes)",
-          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware",
-          "on_ota_failure": "Action en cas d'échec OTA",
-          "on_ota_timeout": "Action si le temps expire pendant l'OTA"
+          "source_entity": "Source entity",
+          "name": "Custom name (optional)",
+          "hold_duration": "Active hold duration (seconds)",
+          "grace_period": "Dropout grace period (seconds)",
+          "optimistic": "Optimistic mode (immediate state feedback)",
+          "ota_duration": "Total OTA keep-awake duration (minutes)",
+          "ping_interval": "Ping interval (seconds)",
+          "auto_ota_trigger": "Auto-activate on firmware update",
+          "on_ota_failure": "Action on OTA failure",
+          "on_ota_timeout": "Action if timer expires during OTA"
         }
       }
     },
     "error": {
-      "unsupported_domain": "Le domaine de cette entité n'est pas supporté (choisissez un binary_sensor, sensor ou switch)."
+      "unsupported_domain": "The domain of this entity is not supported (choose binary_sensor, sensor, or switch)."
     },
     "abort": {
-      "already_configured": "Cette entité source est déjà surveillée par KeepActive."
+      "already_configured": "This source entity is already monitored by KeepActive."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "DomoLink KeepActive - Configuration",
-        "description": "Que souhaitez-vous faire ? ({count} entité(s) configurée(s))",
+        "description": "What would you like to do? ({count} configured entity/entities)",
         "data": {
-          "choice": "Action à effectuer"
+          "choice": "Action to perform"
         }
       },
       "view": {
-        "title": "Configuration actuelle ({count} entité(s))",
+        "title": "Current Configuration ({count} entity/entities)",
         "description": "{summary}",
         "data": {
-          "view_action": "Action suivante"
+          "view_action": "Next action"
         }
       },
       "add": {
-        "title": "Ajouter une entité KeepActive",
-        "description": "Sélectionnez l'entité source et configurez les délais de protection et le moteur OTA Keep-Awake.",
+        "title": "Add a KeepActive Entity",
+        "description": "Select the source entity and configure protection delays and the OTA Keep-Awake engine.",
         "data": {
-          "source_entity": "Entité source",
-          "name": "Nom personnalisé (optionnel)",
-          "hold_duration": "Durée de maintien actif (secondes)",
-          "grace_period": "Période de grâce indisponibilité (secondes)",
-          "optimistic": "Mode optimiste (retour d'état immédiat)",
-          "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
-          "ping_interval": "Intervalle entre chaque ping (secondes)",
-          "ping_method": "Méthode d'envoi du ping de réveil",
-          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware",
-          "on_ota_failure": "Action en cas d'échec OTA",
-          "on_ota_timeout": "Action si le temps expire pendant l'OTA"
+          "source_entity": "Source entity",
+          "name": "Custom name (optional)",
+          "hold_duration": "Active hold duration (seconds)",
+          "grace_period": "Dropout grace period (seconds)",
+          "optimistic": "Optimistic mode (immediate state feedback)",
+          "ota_duration": "Total OTA keep-awake duration (minutes)",
+          "ping_interval": "Ping interval (seconds)",
+          "ping_method": "Wakeup ping transmission method",
+          "auto_ota_trigger": "Auto-activate on firmware update",
+          "on_ota_failure": "Action on OTA failure",
+          "on_ota_timeout": "Action if timer expires during OTA"
         }
       },
       "edit_select": {
-        "title": "Modifier une entité KeepActive",
-        "description": "Sélectionnez l'entité que vous souhaitez modifier.",
+        "title": "Edit a KeepActive Entity",
+        "description": "Select the entity you want to edit.",
         "data": {
-          "rule_to_edit": "Entité à modifier"
+          "rule_to_edit": "Entity to edit"
         }
       },
       "edit": {
-        "title": "Modifier l'entité : {name}",
-        "description": "Ajustez les paramètres de l'entité source {source}.",
+        "title": "Edit entity: {name}",
+        "description": "Adjust settings for source entity {source}.",
         "data": {
-          "source_entity": "Entité source",
-          "name": "Nom personnalisé",
-          "hold_duration": "Durée de maintien actif (secondes)",
-          "grace_period": "Période de grâce indisponibilité (secondes)",
-          "optimistic": "Mode optimiste (retour d'état immédiat)",
-          "ota_duration": "Durée totale maintien éveillé OTA (minutes)",
-          "ping_interval": "Intervalle entre chaque ping (secondes)",
-          "ping_method": "Méthode d'envoi du ping de réveil",
-          "auto_ota_trigger": "Auto-activation lors des mises à jour firmware",
-          "on_ota_failure": "Action en cas d'échec OTA",
-          "on_ota_timeout": "Action si le temps expire pendant l'OTA"
+          "source_entity": "Source entity",
+          "name": "Custom name",
+          "hold_duration": "Active hold duration (seconds)",
+          "grace_period": "Dropout grace period (seconds)",
+          "optimistic": "Optimistic mode (immediate state feedback)",
+          "ota_duration": "Total OTA keep-awake duration (minutes)",
+          "ping_interval": "Ping interval (seconds)",
+          "ping_method": "Wakeup ping transmission method",
+          "auto_ota_trigger": "Auto-activate on firmware update",
+          "on_ota_failure": "Action on OTA failure",
+          "on_ota_timeout": "Action if timer expires during OTA"
         }
       },
       "delete": {
-        "title": "Supprimer une entité KeepActive",
-        "description": "Sélectionnez l'entité à supprimer et confirmez votre choix.",
+        "title": "Delete a KeepActive Entity",
+        "description": "Select the entity to remove and confirm your choice.",
         "data": {
-          "rule_to_delete": "Entité à supprimer",
-          "confirm_delete": "Je confirme vouloir supprimer cette entité"
+          "rule_to_delete": "Entity to delete",
+          "confirm_delete": "I confirm that I want to delete this entity"
         }
       }
     },
     "error": {
-      "unsupported_domain": "Le domaine de cette entité n'est pas supporté (choisissez un binary_sensor, sensor ou switch).",
-      "already_configured": "Cette entité source est déjà configurée dans KeepActive.",
-      "must_confirm_delete": "Veuillez cocher la case de confirmation pour supprimer l'entité."
+      "unsupported_domain": "The domain of this entity is not supported (choose binary_sensor, sensor, or switch).",
+      "already_configured": "This source entity is already configured in KeepActive.",
+      "must_confirm_delete": "Please check the confirmation box to delete the entity."
     }
   }
 }
